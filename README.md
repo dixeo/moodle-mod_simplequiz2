@@ -16,7 +16,7 @@ SimpleQuiz (`mod_simplequiz2`) is an **activity module** for running **multiple-
 
 ## Requirements
 
-Minimum **Moodle 4.3** (`$plugin->requires` in `version.php`, currently `2023100900`). Confirm compatibility with your production branch before upgrading.
+Minimum **Moodle 4.3** (`$plugin->requires` in `version.php`, currently `2023100900`). The activity form uses the site **TinyMCE** editor (legacy Atto markup is still recognised in client-side validation). Empty question slots are rendered as plain textareas and TinyMCE is initialised in the browser when a slot is shown, which avoids broken editors on hidden fieldsets. Tested on Moodle 4.3–4.5 and 5.x.
 
 ## Installation
 

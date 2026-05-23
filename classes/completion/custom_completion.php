@@ -15,10 +15,10 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- *  Activity custom completion subclass for the forum activity.
+ * Activity custom completion subclass for the simplequiz2 activity.
  *
- * Class for defining mod_forum's custom completion rules and fetching the completion statuses
- * of the custom completion rules for a given forum instance and a user.
+ * Class for defining mod_simplequiz2's custom completion rules and fetching the completion statuses
+ * of the custom completion rules for a given simplequiz2 instance and a user.
  *
  * @package    mod_simplequiz2
  * @copyright  2023 Ministère de l'Éducation nationale français; Dixeo (contact@dixeo.com)

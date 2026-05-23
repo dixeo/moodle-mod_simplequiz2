@@ -18,21 +18,26 @@
  *
  * @module      mod_simplequiz2/view
  * @copyright   2022 Ministère de l'Éducation nationale français; Dixeo (contact@dixeo.com)
- * @author      Céline Hernandez
  * @license     http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-define(['jquery', 'core/modal_factory', 'core/str'], function($, ModalFactory, str) {
-    var modSimplequizView = {
+define([
+    'core/config',
+    'core/str',
+    'core/modal_save_cancel',
+    'core/modal_events',
+    'core/notification',
+], function(Config, str, ModalSaveCancel, ModalEvents, Notification) {
 
-        // Set main attributes.
+    const modSimplequizView = {
+
         instanceId: 0,
         courseId: 0,
         courseModuleId: null,
         attemptId: 0,
-        apiUrl: M.cfg.wwwroot + '/mod/simplequiz2/ajax/ajax.php',
+        apiUrl: '',
+        stringCache: {},
 
-        // Intl
         langStrings: [
             'aria_question_text',
             'aria_answer_text',
@@ -47,130 +52,142 @@ define(['jquery', 'core/modal_factory', 'core/str'], function($, ModalFactory, s
             'aria_audio',
             'aria_no_description',
             'session_expired_title',
-            'session_expired_body'
+            'session_expired_body',
         ],
 
+        /**
+         * Cached plugin string or parametrized string via core/str.
+         *
+         * @param {string} key String identifier
+         * @param {Object} [params] Placeholder values
+         * @return {Promise<string>}
+         */
+        getStr: async function(key, params) {
+            if (params) {
+                return str.get_string(key, 'mod_simplequiz2', params);
+            }
+            return this.stringCache[key] || '';
+        },
+
+        getActivityTitleElement: function() {
+            const selectors = [
+                'section#region-main > h2',
+                'section#region-main h2',
+                '.activity-header h1',
+                '#page-header h1',
+                '.page-header-headings h1',
+                '[data-region="main-content"] h2',
+            ];
+            for (let i = 0; i < selectors.length; i++) {
+                const element = document.querySelector(selectors[i]);
+                if (element) {
+                    return element;
+                }
+            }
+            return null;
+        },
+
+        focusActivityLandmarks: function() {
+            const title = this.getActivityTitleElement();
+            if (title) {
+                title.setAttribute('tabindex', '0');
+                title.focus();
+            }
+            const intro = document.querySelector('.activity-description#intro');
+            if (intro) {
+                intro.setAttribute('tabindex', '0');
+            }
+        },
+
         init: async function(instanceId, courseId, courseModuleId, attemptId) {
+            const that = this;
 
-            // Not good. This can be used, else use arrow function.
-            var that = this;
-
-            // Set main datas.
             this.instanceId = instanceId;
             this.courseId = courseId;
             this.courseModuleId = courseModuleId;
             this.attemptId = attemptId;
+            this.apiUrl = Config.wwwroot + '/mod/simplequiz2/ajax/ajax.php';
 
-            // Preload language strings before any click handler can use M.util.get_string().
-            const modStrings = this.langStrings.map(l => {
-                return {
-                    key: l,
-                    component: 'mod_simplequiz2'
-                };
+            const modStrings = this.langStrings.map(l => ({
+                key: l,
+                component: 'mod_simplequiz2',
+            }));
+            const loaded = await str.get_strings(modStrings);
+            this.langStrings.forEach((key, index) => {
+                this.stringCache[key] = loaded[index];
             });
-            await str.get_strings(modStrings);
 
-            // Init answer selection
-            let answerButtons = document.querySelectorAll('.question-container .answer-container');
-            answerButtons.forEach(function(answerButton) {
-                answerButton.onclick = function() {
-                    // Toggle style for selected answer.
+            document.querySelectorAll('.question-container .answer-container').forEach((answerButton) => {
+                answerButton.addEventListener('click', () => {
                     answerButton.classList.toggle('selected');
-                };
+                });
             });
 
-            // Init check answer buttons
-            let checkAnswerButtons = document.querySelectorAll('.question-container button.check-answer');
-            checkAnswerButtons.forEach(function(checkAnswerButton) {
-                checkAnswerButton.onclick = function() {
-                    let questionId = this.dataset.questionid;
-                    that.checkAnswers(questionId);
-                };
+            document.querySelectorAll('.question-container button.check-answer').forEach((checkAnswerButton) => {
+                checkAnswerButton.addEventListener('click', () => {
+                    that.checkAnswers(checkAnswerButton.dataset.questionid);
+                });
             });
 
-            // Init next question buttons
-            let nextQuestionButtons = document.querySelectorAll('.question-container button.next-question');
-            nextQuestionButtons.forEach(function(nextQuestionButton) {
-                nextQuestionButton.onclick = function() {
-                    let questionId = this.dataset.questionid;
-                    that.displayNextQuestion(questionId);
-                };
+            document.querySelectorAll('.question-container button.next-question').forEach((nextQuestionButton) => {
+                nextQuestionButton.addEventListener('click', () => {
+                    that.displayNextQuestion(nextQuestionButton.dataset.questionid);
+                });
             });
 
-            // Init show results button
-            document.querySelector('#simplequiz_container button.show-results').onclick = function() {
-                that.updateResultspage();
-            };
-
-            // Init restart button
-            document.querySelector('#simplequiz_container button.restart').onclick = function() {
-                location.reload();
-            };
-
-            // Fill aria label for the first question.
-            that.setAriaLabel(0);
-
-            // Focus on activity title and intro.
-            document.querySelector('section#region-main > h2').setAttribute('tabindex', '0');
-            if (document.querySelector('.activity-description#intro') !== null) {
-                document.querySelector('.activity-description#intro').setAttribute('tabindex', '0');
+            const showResultsButton = document.querySelector('#simplequiz_container button.show-results');
+            if (showResultsButton) {
+                showResultsButton.addEventListener('click', () => {
+                    that.updateResultspage();
+                });
             }
-            document.querySelector('section#region-main > h2').focus();
+
+            const restartButton = document.querySelector('#simplequiz_container button.restart');
+            if (restartButton) {
+                restartButton.addEventListener('click', () => {
+                    location.reload();
+                });
+            }
+
+            await that.setAriaLabel(0);
+            that.focusActivityLandmarks();
         },
 
-        /**
-         * Set aria-label for a given question id
-         * @param {number} questionId Question index
-         */
-        setAriaLabel: function(questionId) {
-            // Get the main question container.
+        setAriaLabel: async function(questionId) {
             const questionContainer = document.querySelector(`.question-container[data-questionid="${questionId}"]`);
-
-            // Set aria label for question text element.
             const questionText = questionContainer.querySelector('.question-text');
             questionText.setAttribute('aria-label', questionText.innerText);
 
-
-            // Set aria label for each answers
-            questionContainer.querySelectorAll('.answer-container').forEach((elem) => {
-                const answerInfo = this.getAccessibilityInformation(elem.querySelector('.answer-text'));
-                elem.setAttribute('aria-label', M.util.get_string('aria_answer_text', 'mod_simplequiz2', {
-                    answer: answerInfo
-                }));
-            });
+            const labels = await Promise.all(
+                [...questionContainer.querySelectorAll('.answer-container')].map(async(elem) => {
+                    const answerInfo = await this.getAccessibilityInformation(elem.querySelector('.answer-text'));
+                    const label = await this.getStr('aria_answer_text', {answer: answerInfo});
+                    elem.setAttribute('aria-label', label);
+                    return label;
+                })
+            );
+            return labels;
         },
 
-        /**
-         * Ask api to check question user result, display answers status and question status
-         * and update navigation buttons
-         *
-         * @param {string} questionId Question id
-         * @returns {Promise<void>}
-         */
         checkAnswers: async function(questionId) {
-
-            // Get selected answers
             const selector = '.question-container[data-questionid="' + questionId + '"] .answer-container.selected';
-            let selectedAnswers = document.querySelectorAll(selector);
+            const selectedAnswers = document.querySelectorAll(selector);
 
-            let userChoices = [];
+            const userChoices = [];
             for (let i = 0; i < selectedAnswers.length; i++) {
                 userChoices.push(selectedAnswers[i].dataset.answerid);
             }
 
-            // Call to api to get answers corrections
-            let data = await this.communicate(this.apiUrl + '?action=check_question&id=' + this.instanceId, {
-                'questionid': questionId,
-                'attemptid': this.attemptId,
-                'answers': userChoices.join(','),
+            const data = await this.communicate(this.apiUrl + '?action=check_question&id=' + this.instanceId, {
+                questionid: questionId,
+                attemptid: this.attemptId,
+                answers: userChoices.join(','),
             });
 
-            // Check if at least one correct answers is checked.
-            var hasCorrectAnswer = false;
+            let hasCorrectAnswer = false;
 
-            // Print answers status.
             for (let i = 0; i < selectedAnswers.length; i++) {
-                let answerId = selectedAnswers[i].dataset.answerid;
+                const answerId = selectedAnswers[i].dataset.answerid;
                 selectedAnswers[i].classList.remove('selected');
                 if (data.results[answerId] === true) {
                     selectedAnswers[i].classList.add('question-success');
@@ -180,266 +197,187 @@ define(['jquery', 'core/modal_factory', 'core/str'], function($, ModalFactory, s
                 }
             }
 
-            // Disabled click on answers
-            let answers = document.querySelectorAll('.question-container[data-questionid="' + questionId + '"] .answer-container');
+            const answers = document.querySelectorAll(
+                '.question-container[data-questionid="' + questionId + '"] .answer-container'
+            );
             for (let i = 0; i < answers.length; i++) {
                 answers[i].disabled = true;
             }
 
-            // Display question status (modifier class for styling: success / partial / fail).
             const statusEl = document.querySelector('.question-status[data-questionid="' + questionId + '"]');
             const statusModifierClasses = ['question-status-success', 'question-status-partial', 'question-status-fail'];
             statusEl.classList.remove(...statusModifierClasses);
             let status = '';
             if (data.iscorrect === true) {
-                status = M.util.get_string('questionsuccess', 'mod_simplequiz2');
+                status = await this.getStr('questionsuccess');
                 statusEl.classList.add('question-status-success');
             } else if (data.iscorrect === false && hasCorrectAnswer === true) {
-                status = M.util.get_string('questionpartial', 'mod_simplequiz2');
+                status = await this.getStr('questionpartial');
                 statusEl.classList.add('question-status-partial');
             } else {
-                status = M.util.get_string('questionfail', 'mod_simplequiz2');
+                status = await this.getStr('questionfail');
                 statusEl.classList.add('question-status-fail');
             }
             statusEl.innerHTML = status;
 
-            // Hide check button and display next question or restart button.
-            let nextquestion = document.querySelector('.question-container[data-questionid="' + (parseInt(questionId) + 1) + '"]');
+            const nextquestion = document.querySelector(
+                '.question-container[data-questionid="' + (parseInt(questionId) + 1) + '"]'
+            );
             if (!nextquestion) {
-                // Is last question, display restart button
-                document.querySelector('#simplequiz_container button.show-results').style.display = "block";
-                const restartLabel = M.util.get_string('aria_restart', 'mod_simplequiz2', {status});
-                document.querySelector('#simplequiz_container button.show-results').setAttribute(
-                    'aria-label', restartLabel
-                );
-                document.querySelector('#simplequiz_container button.show-results').focus();
+                const showResults = document.querySelector('#simplequiz_container button.show-results');
+                showResults.style.display = 'block';
+                const restartLabel = await this.getStr('aria_restart', {status});
+                showResults.setAttribute('aria-label', restartLabel);
+                showResults.focus();
             } else {
-                // Display next question button
-                const nextBtn = document.querySelector(
-                    'button.next-question[data-questionid="' + questionId + '"]'
-                );
-                nextBtn.style.display = "block";
-                nextBtn.setAttribute(
-                    'aria-label', M.util.get_string('aria_next', 'mod_simplequiz2', {status})
-                );
+                const nextBtn = document.querySelector('button.next-question[data-questionid="' + questionId + '"]');
+                nextBtn.style.display = 'block';
+                nextBtn.setAttribute('aria-label', await this.getStr('aria_next', {status}));
                 nextBtn.focus();
             }
 
-            // Hide check answers button
-            document.querySelector('button.check-answer[data-questionid="' + questionId + '"]').style.display = "none";
+            document.querySelector('button.check-answer[data-questionid="' + questionId + '"]').style.display = 'none';
         },
 
-        /**
-         * Hide question associated to questionId and display the next one (or reload if not exists)
-         * @param {string} questionId Question id
-         */
-        displayNextQuestion: function(questionId) {
+        displayNextQuestion: async function(questionId) {
+            const nextQuestion = document.querySelector(
+                '.question-container[data-questionid="' + (parseInt(questionId) + 1) + '"]'
+            );
 
-            let nextQuestion = document.querySelector('.question-container[data-questionid="' + (parseInt(questionId) + 1) + '"]');
-
-            // If there is no next question, restart
             if (!nextQuestion) {
                 location.reload();
+                return;
             }
 
-            // Hide current question
-            document.querySelector(
-                '.question-container[data-questionid="' + questionId + '"]'
-            ).style.display = "none";
+            document.querySelector('.question-container[data-questionid="' + questionId + '"]').style.display = 'none';
+            nextQuestion.style.display = 'block';
 
-            // Display next question
-            nextQuestion.style.display = "block";
-
-            // Init accessibility.
-            this.setAriaLabel((parseInt(questionId) + 1));
+            await this.setAriaLabel(parseInt(questionId) + 1);
             nextQuestion.querySelector('.question-text').focus();
         },
 
-        /**
-         * Get attempt and best score to print them on attempt result page
-         */
         updateResultspage: async function() {
-
-            // Call to api to attempt score and best score.
-            let data = await this.communicate(this.apiUrl + '?action=get_attempt_results&id=' + this.instanceId, {
-                'attemptid': this.attemptId,
+            const data = await this.communicate(this.apiUrl + '?action=get_attempt_results&id=' + this.instanceId, {
+                attemptid: this.attemptId,
             });
 
-            // Prepare and print attempt score lang str.
-            var attemptScoreStr = str.get_string('result-score', 'mod_simplequiz2', {
-                score: Math.trunc(data.attemptgrade)
-            });
-            $.when(attemptScoreStr).done(function(localizedString) {
-                const currentScore = document.querySelector('#simplequiz-result .current-score');
-                if (currentScore) {
-                    currentScore.innerHTML = localizedString;
-                }
-            });
+            const [attemptLabel, bestLabel] = await str.get_strings([
+                {key: 'result-score', component: 'mod_simplequiz2', param: {score: Math.trunc(data.attemptgrade)}},
+                {key: 'result-bestscore', component: 'mod_simplequiz2', param: {score: Math.trunc(data.bestscore)}},
+            ]);
 
-            // Prepare and print best score lang str.
-            var bestScoreStr = str.get_string('result-bestscore', 'mod_simplequiz2', {
-                score: Math.trunc(data.bestscore)
-            });
-            $.when(bestScoreStr).done(function(localizedString) {
-                const bestScore = document.querySelector('#simplequiz-result .best-score');
-                if (bestScore) {
-                    bestScore.innerHTML = localizedString;
-                }
-            });
+            const currentScore = document.querySelector('#simplequiz-result .current-score');
+            if (currentScore) {
+                currentScore.innerHTML = attemptLabel;
+            }
 
-            // Hide fireworks if result is under 100%.
+            const bestScore = document.querySelector('#simplequiz-result .best-score');
+            if (bestScore) {
+                bestScore.innerHTML = bestLabel;
+            }
+
             if (data.attemptgrade < 100) {
-                document.querySelectorAll('#simplequiz-result .fireworks').forEach(function(elem) {
+                document.querySelectorAll('#simplequiz-result .fireworks').forEach((elem) => {
                     elem.style.visibility = 'hidden';
                 });
             }
 
-            // Toggle game/results div.
             const questionsContainer = document.querySelector('#simplequiz-questions');
             const resultContainer = document.querySelector('#simplequiz-result');
-            const currentScore = document.querySelector('#simplequiz-result .current-score');
             if (questionsContainer) {
-                questionsContainer.style.display = "none";
+                questionsContainer.style.display = 'none';
             }
             if (resultContainer) {
-                resultContainer.style.display = "flex";
+                resultContainer.style.display = 'flex';
             }
             if (currentScore) {
                 currentScore.focus();
             }
-
         },
 
-        /**
-         * Search description (text, alt or title) in a card to be played by screen readers.
-         *
-         * @param {HTMLElement} container DOM element containing the content
-         * @return {string} Accessibility description
-         */
-        getAccessibilityInformation: function(container) {
-            // Determine aria-label for media content cards.
-            // Check only the FIRST element. Considering just one HTML element is authorized.
-
-            // Video
+        getAccessibilityInformation: async function(container) {
             if (container.querySelector('video') !== null) {
-                return M.util.get_string('aria_video', 'mod_simplequiz2', {
-                    description: this.findMetaData(container.querySelector('video'))
+                return this.getStr('aria_video', {
+                    description: this.findMetaData(container.querySelector('video')),
                 });
             }
-            // Audio
             if (container.querySelector('audio') !== null) {
-                return M.util.get_string('aria_audio', 'mod_simplequiz2', {
-                    description: this.findMetaData(container.querySelector('audio'))
+                return this.getStr('aria_audio', {
+                    description: this.findMetaData(container.querySelector('audio')),
                 });
             }
-            // Image
             if (container.querySelector('img') !== null) {
-                return M.util.get_string('aria_image', 'mod_simplequiz2', {
-                    description: this.findMetaData(container.querySelector('img'))
+                return this.getStr('aria_image', {
+                    description: this.findMetaData(container.querySelector('img')),
                 });
             }
-            // Equation
             if (container.querySelector('.filter_mathjaxloader_equation') !== null) {
-                return M.util.get_string('aria_math', 'mod_simplequiz2');
+                return this.getStr('aria_math');
             }
 
             return container.innerText;
         },
 
-        /**
-         * Just find the good attribute containg meta description of anelement.
-         *
-         * @param {HTMLElement} elem targeted DOM element
-         * @return {string} Meta description
-         */
         findMetaData: function(elem) {
             if (elem.title !== '') {
                 return elem.title;
-            } else if (elem.getAttribute('alt') !== '' && elem.getAttribute('alt') !== null) {
-                return elem.getAttribute('alt');
-            } else {
-                return M.util.get_string('aria_no_description', 'mod_simplequiz2');
             }
+            if (elem.getAttribute('alt') !== '' && elem.getAttribute('alt') !== null) {
+                return elem.getAttribute('alt');
+            }
+            return this.stringCache['aria_no_description'] || '';
         },
 
-        /**
-         * Send HTTP async request to the server.
-         * @param {string} url Request URL
-         * @param {Object} [payload] Data to send to the server
-         * @return {Promise<Object>} Deserialized JSON response
-         */
         communicate: async function(url, payload = null) {
-
-            let formData = new FormData();
-
-            // These data are for the authentification and enrollment.
-            formData.append('sesskey', M.cfg.sesskey);
+            const formData = new FormData();
+            formData.append('sesskey', Config.sesskey);
             formData.append('courseid', this.courseId);
             formData.append('coursemoduleid', this.courseModuleId);
 
-            // Add datas to the formdata before the fetch.
             if (payload !== null) {
                 for (const [key, value] of Object.entries(payload)) {
                     formData.append(key, value);
                 }
             }
 
-            // Async call to the server with payload in url AND body.
-            let response = await fetch(url, {
-                method: "POST",
-                body: formData
+            const response = await fetch(url, {
+                method: 'POST',
+                body: formData,
             });
 
             const data = await response.json();
-
-            // Check if there is an error in the HTTP response.
             this.handleError(response, data);
-
-            // Return the response.
             return data;
         },
 
-        /**
-         * Check if there is an HTTP error code, then display modal
-         * with tech info, or redirect to login.
-         * Based on Moodle Modal, with Jquery
-         *
-         * @param {Response} response fetch() response object
-         * @param {Object} data Parsed response body
-         */
         handleError: function(response, data) {
+            const redirectHome = function() {
+                location.href = Config.wwwroot;
+            };
 
-            let modalElement = $('#modal');
-
-            // Redirect to home page if user is not logged, or if its session has expired.
             if (response.status == 401 || data.errorcode == 'requireloginerror') {
-                ModalFactory.create({
-                    title: M.util.get_string('session_expired_title', 'mod_simplequiz2'),
-                    body: M.util.get_string('session_expired_body', 'mod_simplequiz2')
-                }, modalElement).done(function(modal) {
-                    modal.show();
-                    // Redirect to home page after user closed the modal.
-                    modal.getRoot().on('modal:hidden', function() {
-                        location.href = M.cfg.wwwroot;
-                    });
-                    // Or redirect auto after 5 secondes.
-                    setTimeout(function() {
-                        location.href = M.cfg.wwwroot;
-                    }, 5000);
+                ModalSaveCancel.create({
+                    title: this.stringCache['session_expired_title'],
+                    body: this.stringCache['session_expired_body'],
+                    show: true,
+                    removeOnClose: true,
+                }).then(function(modal) {
+                    modal.getRoot().on(ModalEvents.save, redirectHome);
+                    modal.getRoot().on(ModalEvents.hidden, redirectHome);
+                    setTimeout(redirectHome, 5000);
+                    return modal;
+                }).catch(function() {
+                    redirectHome();
                 });
             } else if (response.ok === false) {
-                // Show all other error response codes.
-                ModalFactory.create({
-                    title: `Error ${response.status}`,
-                    body: "<p>Check browser console.</p>"
-                }, modalElement).done(function(modal) {
-                    modal.show();
-                });
+                Notification.alert(
+                    'Error ' + response.status,
+                    'Check browser console.',
+                    'Error'
+                );
             }
         },
     };
 
-    // Add object to window to be called outside require.
-    window.modSimplequizView = modSimplequizView;
     return modSimplequizView;
 });

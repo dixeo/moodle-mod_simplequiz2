@@ -21,34 +21,7 @@
  * @license     http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-define([], function() {
-
-    /**
-     * Whether the answer editor/textarea for a slot has non-empty content.
-     *
-     * @param {string} questionId Question id
-     * @param {string} answerId Answer id
-     * @return {boolean}
-     */
-    var answerSlotHasContent = function(questionId, answerId) {
-        let editor = document.querySelector(
-            "#id_questions" + questionId + "_answers_" + answerId +
-            "editable.editor_atto_content"
-        );
-        let stripContent = '';
-        if (editor === null) {
-            const ta = document.querySelector(
-                '#id_questions' + questionId + '_answers_' + answerId
-            );
-            stripContent = ta ? ta.textContent : '';
-        } else {
-            stripContent = editor.innerHTML;
-        }
-        stripContent = stripContent.replace(/<\/?p[^>]*>/g, "");
-        stripContent = stripContent.replace(/<\/?br[^>]*>/g, "");
-        stripContent = stripContent.trim();
-        return stripContent !== '';
-    };
+define(['mod_simplequiz2/editor_helpers'], function(EditorHelpers) {
 
     /**
      * True if some checked "correct answer" checkbox points to an answer slot with content.
@@ -57,18 +30,34 @@ define([], function() {
      * @param {NodeListOf<Element>} checkboxs Correct-answer checkboxes for this question
      * @return {boolean}
      */
-    var hasCheckedAnswerWithContent = function(questionId, checkboxs) {
+    const hasCheckedAnswerWithContent = function(questionId, checkboxs) {
         for (let i = 0; i < checkboxs.length; i++) {
             const checkbox = checkboxs[i];
             if (!checkbox.checked) {
                 continue;
             }
             const answerId = checkbox.dataset.answerid;
-            if (answerSlotHasContent(questionId, answerId)) {
+            if (EditorHelpers.hasEditorContent(EditorHelpers.answerElementId(questionId, answerId))) {
                 return true;
             }
         }
         return false;
+    };
+
+    /**
+     * Count non-empty answer slots for a question.
+     *
+     * @param {string} questionId Question index
+     * @return {number}
+     */
+    const countAnswersWithContent = function(questionId) {
+        let count = 0;
+        for (let answerId = 0; answerId < 5; answerId++) {
+            if (EditorHelpers.hasEditorContent(EditorHelpers.answerElementId(questionId, answerId))) {
+                count++;
+            }
+        }
+        return count;
     };
 
     var modSimplequizEdit = {
@@ -98,7 +87,7 @@ define([], function() {
                 }
 
                 // If the container has no content, hide it
-                if (questionHeader.querySelector('.question-text-editor:not(.has-content')) {
+                if (questionHeader.querySelector('.question-text-editor:not(.has-content)')) {
                     questionHeader.hidden = true;
                 }
 
@@ -118,7 +107,7 @@ define([], function() {
 
             let fieldsets = document.querySelectorAll("fieldset[id^='id_question_header_']");
             fieldsets.forEach(function(fieldset) {
-                fieldset.onclick = function() {
+                fieldset.addEventListener('click', function() {
 
                     let questionId = fieldset.id.replace('id_question_header_', '');
 
@@ -127,10 +116,7 @@ define([], function() {
                         return;
                     }
 
-                    // Check if rich editor are loaded
-                    let questionText = document.getElementById('id_questions' + questionId + '_texteditable');
-                    if (questionText === null) {
-                        // If not, exit
+                    if (!EditorHelpers.isQuestionTextEditorReady(questionId)) {
                         return;
                     }
 
@@ -138,18 +124,12 @@ define([], function() {
 
                     that.updateQuestionHeader(questionId);
 
-                    let answersEditor = document.querySelectorAll(
-                        "div[id^='id_questions" + questionId + "_answers_'].editor_atto_content, " +
-                        "textarea[id^='id_questions" + questionId + "_answers_']"
-                    );
-                    for (const editor of answersEditor) {
+                    const refreshQuestion = () => {
+                        that.checkQuestionsAnswersWarnings(false);
+                        that.updateQuestionsBackground([questionId]);
+                    };
 
-                        // On change of editor content (work when audio/img are added), update displayed question info
-                        editor.addEventListener("change", () => {
-                            that.checkQuestionsAnswersWarnings(false);
-                            that.updateQuestionsBackground([questionId]);
-                        });
-                    }
+                    EditorHelpers.bindAnswerFieldListeners(questionId, refreshQuestion);
 
                     let checkboxs = document.querySelectorAll("input[id^='id_questions" + questionId + "_correctanswers_']");
                     for (const checkbox of checkboxs) {
@@ -159,7 +139,7 @@ define([], function() {
                         });
                     }
 
-                };
+                });
             });
 
         },
@@ -170,7 +150,7 @@ define([], function() {
 
             let addQuestionButtons = document.querySelectorAll('form input[type="button"].add-simplequestion');
             addQuestionButtons.forEach(function(addQuestionButton) {
-                addQuestionButton.onclick = function() {
+                addQuestionButton.addEventListener('click', function() {
 
                     let currentFieldset = document.getElementById('id_question_header_' + addQuestionButton.dataset.questionid);
 
@@ -185,15 +165,54 @@ define([], function() {
                             // Unhide the fieldset
                             fieldset.hidden = false;
 
-                            // Open the fieldset
-                            let header = fieldset.querySelector('a[aria-expanded="false"][aria-controls^="id_question_header_"]');
+                            let questionId = fieldset.id.replace('id_question_header_', '');
+
+                            EditorHelpers.removeEditorsForQuestion(questionId);
+                            delete that.preparedFieldsets[questionId];
+
+                            const refreshQuestion = () => {
+                                that.checkQuestionsAnswersWarnings(false);
+                                that.updateQuestionsBackground([questionId]);
+                            };
+
+                            // TinyMCE must re-init after the collapse panel is visible, not only after hidden=false.
+                            const panel = fieldset.querySelector('.collapse');
+                            let header = fieldset.querySelector(
+                                'a[aria-expanded="false"][aria-controls^="id_question_header_"]'
+                            );
+                            let refreshPromise;
                             if (header) {
+                                refreshPromise = EditorHelpers.scheduleInitEditorsForQuestion(
+                                    questionId,
+                                    fieldset,
+                                    refreshQuestion
+                                );
                                 header.click();
+                            } else if (panel) {
+                                panel.classList.add('show');
+                                refreshPromise = EditorHelpers.initEditorsForQuestion(questionId, refreshQuestion);
+                            } else {
+                                refreshPromise = EditorHelpers.initEditorsForQuestion(questionId, refreshQuestion);
                             }
 
                             // Display warning message
-                            let questionId = fieldset.id.replace('id_question_header_', '');
                             that.checkQuestionsAnswersWarnings([questionId]);
+
+                            refreshPromise.then(() => {
+                                if (!that.preparedFieldsets[questionId]) {
+                                    that.preparedFieldsets[questionId] = 1;
+                                    that.updateQuestionHeader(questionId);
+                                    let checkboxs = document.querySelectorAll(
+                                        "input[id^='id_questions" + questionId + "_correctanswers_']"
+                                    );
+                                    for (const checkbox of checkboxs) {
+                                        checkbox.addEventListener('change', function() {
+                                            that.checkQuestionsAnswersWarnings([questionId]);
+                                            that.updateQuestionsBackground([questionId]);
+                                        });
+                                    }
+                                }
+                            });
 
                             break;
                         }
@@ -204,7 +223,7 @@ define([], function() {
 
                     // If there is only one question, hide delete buttons
                     that.checkIfCanAddQuestion();
-                };
+                });
             });
         },
 
@@ -214,35 +233,27 @@ define([], function() {
 
             let deleteQuestionButtons = document.querySelectorAll('form input[type="button"].delete-simplequestion');
             deleteQuestionButtons.forEach(function(deleteQuestionButton) {
-                deleteQuestionButton.onclick = function() {
+                deleteQuestionButton.addEventListener('click', function() {
 
-                    // Empty all fields, hide the container, fix order and title
                     let questionId = deleteQuestionButton.dataset.questionid;
 
-                    // Hide the container
                     document.getElementById('id_question_header_' + questionId).hidden = true;
 
-                    // Empty question text editor adn header
-                    document.getElementById('id_questions' + questionId + '_texteditable').innerHTML = '';
-                    document.getElementById('id_questions' + questionId + '_text').innerHTML = '';
+                    EditorHelpers.setEditorHtml(EditorHelpers.questionTextElementId(questionId), '');
                     document.querySelector('.header-questiontext[data-questionid="' + questionId + '"]').textContent = '';
 
-                    // Empty answers editor
-                    let answersEditors = document.querySelectorAll(
-                        "div[id^='id_questions" + questionId + "_answers_'].editor_atto_content, " +
-                        "textarea[id^='id_questions" + questionId + "_answers_']"
-                    );
-                    answersEditors.forEach(answersEditor => {
-                        answersEditor.innerHTML = '';
-                    });
+                    for (let answerId = 0; answerId < 5; answerId++) {
+                        EditorHelpers.setEditorHtml(EditorHelpers.answerElementId(questionId, answerId), '');
+                    }
 
-                    // Empty answers checkbox
+                    EditorHelpers.removeEditorsForQuestion(questionId);
+                    delete that.preparedFieldsets[questionId];
+
                     let checkboxs = document.querySelectorAll("input[id^='id_questions" + questionId + "_correctanswers_']");
                     checkboxs.forEach(checkbox => {
                         checkbox.checked = false;
                     });
 
-                    // Remove answers state
                     let questionsState = document.querySelectorAll(
                         "div[id^='fitem_id_questions" + questionId + "_answers_'].simplequiz2-answer"
                     );
@@ -251,15 +262,10 @@ define([], function() {
                         questionState.classList.remove("simplequiz2-wrong-answer");
                     });
 
-                    // Fix order of other question
                     that.fixQuestionOrder();
-
-                    // Check add and question question status
                     that.checkIfCanAddQuestion();
-
-                    // Check state of all visible question to enable save button if only the deleted question has error
                     that.checkQuestionsAnswersWarnings(false);
-                };
+                });
             });
 
         },
@@ -269,23 +275,19 @@ define([], function() {
             let questionHeaders = document.querySelectorAll("fieldset[id^='id_question_header_']");
             questionHeaders.forEach(function(questionHeader) {
 
-                // Get the main div questions/answer container.
                 let legend = questionHeader.querySelector('legend ~ div.d-flex');
                 legend.insertAdjacentHTML('afterend', '<div class="header-info-container"></div>');
 
                 let legendContainer = questionHeader.querySelector('.header-info-container');
 
-                // Move question preview below the collapse row (own block inside .header-info-container).
                 let questionText = questionHeader.querySelector('.header-questiontext');
                 if (questionText && legendContainer) {
                     legendContainer.prepend(questionText);
                 }
 
-                // Move answers warning
                 let warnings = questionHeader.querySelectorAll('.error_not_enough_answers, .error_no_right_answer');
                 warnings.forEach(warning => legendContainer.appendChild(warning));
 
-                // Move add/delete buttons
                 let buttons = questionHeader.querySelectorAll('.header-btn');
                 legendContainer.insertAdjacentHTML('beforeend', '<div class="header-buttons-container"></div>');
                 let buttonsContainer = legendContainer.querySelector('.header-buttons-container');
@@ -295,11 +297,23 @@ define([], function() {
 
         // Question fieldset header contains question text at any moment
         updateQuestionHeader: function(questionId) {
-            let questionTextElement = document.getElementById('id_questions' + questionId + '_texteditable');
-            questionTextElement.addEventListener("keyup", () => {
-                let questionText = document.getElementById('id_questions' + questionId + '_texteditable').innerText;
-                document.querySelector('.header-questiontext[data-questionid="' + questionId + '"]').textContent = questionText;
-            });
+            const syncHeader = () => {
+                const plain = EditorHelpers.getQuestionTextPlain(questionId);
+                document.querySelector('.header-questiontext[data-questionid="' + questionId + '"]').textContent = plain;
+            };
+
+            const atto = document.querySelector(
+                '#id_' + EditorHelpers.questionTextElementId(questionId) + 'editable.editor_atto_content'
+            );
+            if (atto) {
+                atto.addEventListener('keyup', syncHeader);
+            }
+
+            const textarea = document.getElementById('id_' + EditorHelpers.questionTextElementId(questionId));
+            if (textarea) {
+                textarea.addEventListener('input', syncHeader);
+                textarea.addEventListener('change', syncHeader);
+            }
         },
 
         // Check if hidden order field and question fieldset match to what to user sees
@@ -313,14 +327,11 @@ define([], function() {
                     continue;
                 }
 
-                // Get question real id
                 let questionId = fieldset.id.replace('id_question_header_', '');
 
-                // Change title
                 let title = fieldset.querySelector(".fheader[aria-controls^='id_question_header_'] ~ h3");
                 title.innerHTML = "Question " + visibleIndex;
 
-                // Change order input
                 document.querySelector('input[name="questions' + questionId + '[questionorder]"]').value = visibleIndex - 1;
 
                 visibleIndex++;
@@ -330,7 +341,6 @@ define([], function() {
         // If there is no hidden question, disable all "add question" buttons
         checkIfCanAddQuestion: function() {
 
-            // Get if at least one fieldset is hidden (not used)
             let fieldsets = document.querySelectorAll("fieldset[id^='id_question_header_']");
             var hasHiddenQuestions = false;
             for (const fieldset of fieldsets) {
@@ -340,14 +350,9 @@ define([], function() {
                 }
             }
 
-            // If no fieldset is hidden, disable "add question" button, else, enable them
             let addButtons = document.querySelectorAll('input.add-simplequestion');
             addButtons.forEach(function(addButton) {
-                if (hasHiddenQuestions === false) {
-                    addButton.disabled = true;
-                } else {
-                    addButton.disabled = false;
-                }
+                addButton.disabled = !hasHiddenQuestions;
             });
 
         },
@@ -372,29 +377,10 @@ define([], function() {
 
                 let fieldset = document.querySelector("fieldset#id_question_header_" + questionId);
                 let questionHasError = false;
-
-                // If question is hidden, save buttons will not be affected by its errors
                 let isHidden = fieldset.hidden;
 
-                // Check if there is enough answers
-                let answersEditor = fieldset.querySelectorAll(
-                    "div[id^='id_questions" + questionId + "_answers_'].editor_atto_content"
-                );
-                let nbContent = 0;
-                for (const answerEditor of answersEditor) {
+                const nbContent = countAnswersWithContent(questionId);
 
-                    // Remove all useless tags from content to check if content is really empty
-                    let stripContent = answerEditor.innerHTML;
-                    stripContent = stripContent.replace(/<\/?p[^>]*>/g, "");
-                    stripContent = stripContent.replace(/<\/?br[^>]*>/g, "");
-                    stripContent = stripContent.trim();
-
-                    if (stripContent.trim() != '') {
-                        nbContent++;
-                    }
-                }
-
-                // Display warning if there is less then two answers with content
                 if (nbContent < 2) {
                     fieldset.querySelector('.error_not_enough_answers').style.display = "inline";
                     questionHasError = true;
@@ -406,7 +392,6 @@ define([], function() {
                     fieldset.querySelector('.error_not_enough_answers').style.display = "none";
                 }
 
-                // Check if there is at least one correct answers, else display the error message
                 if (!questionHasError) {
                     let checkboxs = document.querySelectorAll(
                         "input[id^='id_questions" + questionId + "_correctanswers_']"
@@ -427,19 +412,10 @@ define([], function() {
 
             }
 
-            // If there is some error, disable save buttons
-            if (formHasError === true) {
-                document.getElementById('id_submitbutton').disabled = true;
-                if (document.getElementById('id_submitbutton2')) {
-                    document.getElementById('id_submitbutton2').disabled = true;
-                }
-            } else {
-                document.getElementById('id_submitbutton').disabled = false;
-                if (document.getElementById('id_submitbutton2')) {
-                    document.getElementById('id_submitbutton2').disabled = false;
-                }
+            document.getElementById('id_submitbutton').disabled = formHasError;
+            if (document.getElementById('id_submitbutton2')) {
+                document.getElementById('id_submitbutton2').disabled = formHasError;
             }
-
         },
 
         // Display red or green background on right/wrong answers
@@ -456,31 +432,10 @@ define([], function() {
                     let container = document.querySelector('#fitem_id_questions' + questionId + '_answers_' + answerId);
                     container.classList.add('simplequiz2-answer');
 
-                    // Check if answer has content
-                    let editor = document.querySelector(
-                        "#id_questions" + questionId + "_answers_" + answerId +
-                        "editable.editor_atto_content"
+                    const hasContent = EditorHelpers.hasEditorContent(
+                        EditorHelpers.answerElementId(questionId, answerId)
                     );
-                    let stripContent = '';
-                    if (editor === null) {
 
-                        // Editor are not init, use textarea
-                        stripContent = document.querySelector('#id_questions' + questionId + '_answers_' + answerId).textContent;
-                    } else {
-                        stripContent = editor.innerHTML;
-                    }
-
-                    // Remove all useless tags from content to check if content is really empty
-                    stripContent = stripContent.replace(/<\/?p[^>]*>/g, "");
-                    stripContent = stripContent.replace(/<\/?br[^>]*>/g, "");
-                    stripContent = stripContent.trim();
-
-                    let hasContent = false;
-                    if (stripContent != '') {
-                        hasContent = true;
-                    }
-
-                    // If answer has no content, remove all color, else add right/wrong class
                     if (!hasContent) {
                         container.classList.remove('simplequiz2-wrong-answer');
                         container.classList.remove('simplequiz2-right-answer');
@@ -498,7 +453,5 @@ define([], function() {
 
     };
 
-// Add object to window to be called outside require.
-    window.modSimplequizEdit = modSimplequizEdit;
     return modSimplequizEdit;
 });

@@ -239,7 +239,7 @@ function simplequiz2_delete_instance($id) {
 }
 
 /**
- * Add a get_coursemodule_info function in case any forum type wants to add 'extra' information
+ * Add a get_coursemodule_info function in case the activity needs to add 'extra' information
  * for the course (see resource).
  *
  * Given a course_module object, this function returns any "extra" information that may be needed
@@ -499,8 +499,8 @@ function simplequiz2_prepare_question_from_mod_form(int $cmid, $data) {
 
         $questionrawdata = $data->$fieldname;
 
-        // Exclude empty question.
-        if ($questionrawdata['text']['text'] == "") {
+        // Exclude empty question (TinyMCE may submit <p><br></p> instead of "").
+        if (\mod_simplequiz2\util\editor_content::is_empty($questionrawdata['text']['text'] ?? '')) {
             continue;
         }
 
@@ -515,7 +515,7 @@ function simplequiz2_prepare_question_from_mod_form(int $cmid, $data) {
         // Prepare answers data (convert text and exlude empty answer).
         $answeritemid = 1;
         foreach ($questionrawdata['answers'] as $order => $answerdata) {
-            if ($answerdata['text'] == '') {
+            if (\mod_simplequiz2\util\editor_content::is_empty($answerdata['text'] ?? '')) {
                 continue;
             }
 

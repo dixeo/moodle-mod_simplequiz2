@@ -43,19 +43,6 @@ class mod_simplequiz2_mod_form extends moodleform_mod {
     private $simplequiz;
 
     /**
-     * Show the form using Atto temporarily, then restore the user's editor preference.
-     */
-    public function display() {
-        // Force Atto but keep user preference to set it back after.
-        $originaleditor = get_user_preferences('htmleditor') ?? 'tiny';
-        set_user_preference('htmleditor', 'atto');
-
-        parent::display();
-
-        set_user_preference('htmleditor', $originaleditor);
-    }
-
-    /**
      * Defines forms elements
      */
     public function definition(): void {
@@ -98,8 +85,46 @@ class mod_simplequiz2_mod_form extends moodleform_mod {
         // Add standard buttons, common to all modules.
         $this->add_action_buttons();
 
-        // Js to add/remove questions.
+        // Js to add/remove questions (TinyMCE base options must run after define_questions_fields()).
+        $this->export_tiny_base_options_for_js();
         $PAGE->requires->js_call_amd('mod_simplequiz2/edit', 'init');
+    }
+
+    /**
+     * Pass TinyMCE base options to AMD so deferred editors can be initialised when a question is shown.
+     */
+    private function export_tiny_base_options_for_js(): void {
+        global $PAGE;
+
+        $pref = editors_get_preferred_editor();
+        if (!$pref instanceof \editor_tiny\editor) {
+            return;
+        }
+
+        $siteconfig = get_config('editor_tiny');
+        $manager = new \editor_tiny\manager();
+        $context = $PAGE->context;
+
+        // Registers default TinyMCE config for the page (also runs during editor element render).
+        \editor_tiny\editor::set_default_configuration($manager);
+
+        $config = (object) [
+            'css' => $PAGE->theme->editor_css_url()->out(false),
+            'context' => $context->id,
+            'plugins' => $manager->get_plugin_configuration($context, [], [], $pref),
+            'branding' => property_exists($siteconfig, 'branding') ? !empty($siteconfig->branding) : true,
+            'extended_valid_elements' => $siteconfig->extended_valid_elements ?? 'script[*],p[*],i[*]',
+        ];
+
+        $configoptions = json_encode(convert_to_array($config));
+
+        $inlinejs = <<<EOF
+            require(['mod_simplequiz2/editor_helpers'], (EditorHelpers) => {
+                EditorHelpers.setTinyBaseOptions({$configoptions});
+            });
+        EOF;
+
+        $PAGE->requires->js_amd_inline($inlinejs);
     }
 
     /**
@@ -158,54 +183,74 @@ class mod_simplequiz2_mod_form extends moodleform_mod {
             $mform->addElement('hidden', "questions$i" . "[questionorder]", $i);
             $mform->setType("questions$i" . "[questionorder]", PARAM_INT);
 
-            // Add question text container.
+            // Add question text and answer fields (deferred plain textareas for empty hidden slots).
+            $usedeferred = ($i > 0 && !$hascontent);
             $classes = 'question-text-editor ';
             $classes .= $hascontent ? ' has-content ' : '';
-            $mform->addElement(
-                'editor',
-                "questions$i" . "[text]",
-                get_string('questiontext', 'simplequiz2'),
-                [
-                    'rows'  => 3,
-                    'class' => $classes,
-                ],
-                ['maxfiles' => EDITOR_UNLIMITED_FILES]
-            );
-            $mform->setType("questions$i" . "[text]", PARAM_RAW);
+
+            if ($usedeferred) {
+                $this->add_deferred_editor(
+                    $mform,
+                    "questions{$i}[text]",
+                    get_string('questiontext', 'simplequiz2'),
+                    ['rows' => 3, 'class' => $classes],
+                    "id_questions{$i}_text"
+                );
+            } else {
+                $mform->addElement(
+                    'editor',
+                    "questions$i" . "[text]",
+                    get_string('questiontext', 'simplequiz2'),
+                    [
+                        'rows'  => 3,
+                        'class' => $classes,
+                    ],
+                    ['maxfiles' => EDITOR_UNLIMITED_FILES]
+                );
+                $mform->setType("questions$i" . "[text]", PARAM_RAW);
+
+                if ($hascontent) {
+                    $itemid        = $i + 1;
+                    $converteddata = $this->create_draft_area("questions$i" . "[text]", $questionsdata[$i]->text, $itemid);
+                    $mform->setDefault("questions$i" . "[text]", $converteddata);
+                }
+            }
 
             // The text of the first question is required.
             if ($i == 0) {
                 $mform->addRule("questions$i" . "[text]", get_string('required'), 'required');
             }
 
-            // Add content if needed.
-            if ($hascontent) {
-                $itemid        = $i + 1;
-                $converteddata = $this->create_draft_area("questions$i" . "[text]", $questionsdata[$i]->text, $itemid);
-                $mform->setDefault("questions$i" . "[text]", $converteddata);
-            }
-
             // Add answers containers.
             for ($j = 0; $j < SIMPLE_QUIZ2_MAX_ANSWER_NB; $j++) {
-                // Define answer text.
-                $mform->addElement(
-                    'editor',
-                    "questions$i" . "[answers][$j]",
-                    get_string('formanswertitle', 'simplequiz2', $j + 1),
-                    ['rows' => 1],
-                    ['maxfiles' => EDITOR_UNLIMITED_FILES]
-                );
-                $mform->setType("questions$i" . "[answers][$j]", PARAM_RAW);
-
-                // Add data if needed.
-                if (isset($questionsdata[$i]->answers[$j])) {
-                    $itemid        = ($i + 1) . ($j + 1);
-                    $converteddata = $this->create_draft_area(
-                        "questions$i" . "[text]",
-                        $questionsdata[$i]->answers[$j]->text,
-                        $itemid
+                $answerfieldname = "questions{$i}[answers][{$j}]";
+                if ($usedeferred) {
+                    $this->add_deferred_editor(
+                        $mform,
+                        $answerfieldname,
+                        get_string('formanswertitle', 'simplequiz2', $j + 1),
+                        ['rows' => 1],
+                        "id_questions{$i}_answers_{$j}"
                     );
-                    $mform->setDefault("questions$i" . "[answers][$j]", $converteddata);
+                } else {
+                    $mform->addElement(
+                        'editor',
+                        $answerfieldname,
+                        get_string('formanswertitle', 'simplequiz2', $j + 1),
+                        ['rows' => 1],
+                        ['maxfiles' => EDITOR_UNLIMITED_FILES]
+                    );
+                    $mform->setType($answerfieldname, PARAM_RAW);
+
+                    if (isset($questionsdata[$i]->answers[$j])) {
+                        $itemid        = ($i + 1) . ($j + 1);
+                        $converteddata = $this->create_draft_area(
+                            $answerfieldname,
+                            $questionsdata[$i]->answers[$j]->text,
+                            $itemid
+                        );
+                        $mform->setDefault($answerfieldname, $converteddata);
+                    }
                 }
 
                 // Define if the answer is correct or not.
@@ -374,5 +419,32 @@ class mod_simplequiz2_mod_form extends moodleform_mod {
         }
 
         return parent::validation($data, $files);
+    }
+
+    /**
+     * Add a plain textarea + format/itemid hiddens matching Moodle editor submission shape.
+     * TinyMCE is attached via AMD when the question fieldset is shown.
+     *
+     * @param MoodleQuickForm $mform Form instance.
+     * @param string $basename Field base name (e.g. questions0[text]).
+     * @param string $label Field label.
+     * @param array $attributes Textarea attributes.
+     * @param string $elementid DOM id for the textarea (must match editor_helpers conventions).
+     */
+    private function add_deferred_editor($mform, string $basename, string $label, array $attributes, string $elementid): void {
+        global $CFG;
+
+        require_once("{$CFG->libdir}/filelib.php");
+
+        $draftitemid = file_get_unused_draft_itemid();
+        $attributes['id'] = $elementid;
+        $attributes['class'] = trim(($attributes['class'] ?? '') . ' simplequiz2-deferred-editor');
+
+        $mform->addElement('textarea', "{$basename}[text]", $label, $attributes);
+        $mform->setType("{$basename}[text]", PARAM_RAW);
+        $mform->addElement('hidden', "{$basename}[format]", FORMAT_HTML);
+        $mform->setType("{$basename}[format]", PARAM_INT);
+        $mform->addElement('hidden', "{$basename}[itemid]", $draftitemid);
+        $mform->setType("{$basename}[itemid]", PARAM_INT);
     }
 }

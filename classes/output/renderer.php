@@ -15,25 +15,29 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Simplequiz main renderer
+ * Simplequiz main renderer.
  *
  * @package    mod_simplequiz2
  * @copyright  2022 Ministère de l'Éducation nationale français; Dixeo (contact@dixeo.com)
- * @author     Céline Hernandez
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class mod_simplequiz2_renderer extends plugin_renderer_base {
+
+namespace mod_simplequiz2\output;
+
+defined('MOODLE_INTERNAL') || die();
+
+/**
+ * Renderer for mod_simplequiz2 student and module views.
+ */
+class renderer extends \plugin_renderer_base {
     /**
-     * Print all questions, answers and navigation
+     * Print all questions, answers and navigation.
      *
      * @param \mod_simplequiz2\simplequiz $simplequiz Loaded activity instance.
      * @param array $questionsdata Decoded question structures for the view.
      * @return bool|string
-     * @throws moodle_exception
      */
     public function student_view($simplequiz, $questionsdata) {
-
-        // Prepare questions by shuffling their answers.
         $data = [];
         foreach ($questionsdata as $order => $question) {
             $question->order = $order;
@@ -52,9 +56,13 @@ class mod_simplequiz2_renderer extends plugin_renderer_base {
         }
 
         return $this->render_from_template('mod_simplequiz2/simplequiz_container', [
-                'name' => $simplequiz->__get('instance')->name,
-                'intro' => format_module_intro('simplequiz2', $simplequiz->__get('instance'), $simplequiz->__get('cm')->id),
-                'questions' => $data,
+            'name' => $simplequiz->__get('instance')->name,
+            'intro' => format_module_intro(
+                'simplequiz2',
+                $simplequiz->__get('instance'),
+                $simplequiz->__get('cm')->id
+            ),
+            'questions' => $data,
         ]);
     }
 }
