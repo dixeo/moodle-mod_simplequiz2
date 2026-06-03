@@ -107,12 +107,68 @@
  * View: quiz container (#simplequiz_container)
  * ------------------------------------------------------------------------- */
 
-#page-mod-simplequiz2-view #simplequiz_container .question-container:not(:first-of-type) {
+.simplequiz2-player #simplequiz_container .question-container:not(:first-of-type) {
+    display: none;
+}
+
+/* Tutor embed practice quiz (same player, compact layout in tutor pane). */
+.simplequiz2-embed.simplequiz2-player {
+    font-size: 0.9rem;
+    padding: 0.25rem 0.5rem;
+}
+
+.simplequiz2-embed.simplequiz2-player #simplequiz_container .question-text,
+.simplequiz2-embed.simplequiz2-player #simplequiz_container .check-answer,
+.simplequiz2-embed.simplequiz2-player #simplequiz_container .next-question,
+.simplequiz2-embed.simplequiz2-player #simplequiz_container .show-results {
+    margin: 0 auto;
+    margin-top: 12px;
+    font-size: 16px;
+    padding: 10px 15px;
+}
+
+.simplequiz2-embed.simplequiz2-player #simplequiz_container .question-text .question-rank {
+    font-size: 1.1rem;
+}
+
+.simplequiz2-embed.simplequiz2-player #simplequiz_container .answer-container {
+    padding: 0.75rem 2.5rem 0.75rem 0.75rem;
+    margin: 0.35rem auto;
+    border-radius: 12px;
+    font-size: 16px;
+}
+
+.simplequiz2-embed.simplequiz2-player #simplequiz_container .question-status {
+    font-size: 1rem;
+}
+
+.simplequiz2-embed.simplequiz2-player #simplequiz_container #simplequiz-result {
+    margin-top: 12px;
+    font-size: 1rem;
+}
+
+.simplequiz2-embed.simplequiz2-player #simplequiz_container #simplequiz-result #details .simplequiz2-embed__result-actions {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.simplequiz2-embed.simplequiz2-player #simplequiz_container #simplequiz-result #details .simplequiz2-embed__result-actions button.restart,
+.simplequiz2-embed.simplequiz2-player #simplequiz_container #simplequiz-result #details .simplequiz2-embed__result-actions button.finish-embed {
+    display: inline-block;
+    margin: 0;
+}
+
+.simplequiz2-embed.simplequiz2-player #simplequiz_container #simplequiz-result .best-score {
     display: none;
 }
 
 /* Result panel (hidden until JS shows it). */
-#page-mod-simplequiz2-view #simplequiz_container #simplequiz-result {
+.simplequiz2-player #simplequiz_container #simplequiz-result {
     display: none;
     margin-top: 20px;
     justify-content: space-between;
@@ -120,57 +176,57 @@
     font-size: 1.25em;
 }
 
-#page-mod-simplequiz2-view #simplequiz_container #simplequiz-result .fireworks {
+.simplequiz2-player #simplequiz_container #simplequiz-result .fireworks {
     width: 33%;
-    background-image: url([[pix:mod_simplequiz2|victory-fireworks]]);
+    background-image: url("pix/victory-fireworks.png");
     background-position: 50% 50%;
     background-repeat: no-repeat;
 }
 
-#page-mod-simplequiz2-view #simplequiz_container #simplequiz-result #details {
+.simplequiz2-player #simplequiz_container #simplequiz-result #details {
     width: 33%;
     font-weight: normal;
 }
 
-#page-mod-simplequiz2-view #simplequiz_container #simplequiz-result #details .current-score,
-#page-mod-simplequiz2-view #simplequiz_container #simplequiz-result #details .best-score {
+.simplequiz2-player #simplequiz_container #simplequiz-result #details .current-score,
+.simplequiz2-player #simplequiz_container #simplequiz-result #details .best-score {
     font-weight: bold;
 }
 
 @media (max-width: 930px) {
-    #page-mod-simplequiz2-view #simplequiz_container #simplequiz-result .fireworks {
+    .simplequiz2-player #simplequiz_container #simplequiz-result .fireworks {
         display: none;
     }
 
-    #page-mod-simplequiz2-view #simplequiz_container #simplequiz-result #details {
+    .simplequiz2-player #simplequiz_container #simplequiz-result #details {
         width: 100%;
     }
 }
 
-#page-mod-simplequiz2-view #simplequiz_container #simplequiz-result p:focus,
-#page-mod-simplequiz2-view #simplequiz_container #simplequiz-result p:focus-visible {
+.simplequiz2-player #simplequiz_container #simplequiz-result p:focus,
+.simplequiz2-player #simplequiz_container #simplequiz-result p:focus-visible {
     outline: 0;
 }
 
 /* Post-quiz answers recap. */
-#page-mod-simplequiz2-view #simplequiz_container .answers {
-    margin: 20px auto;
+.simplequiz2-player #simplequiz_container .answers {
+    margin: 0 auto;
     text-align: center;
     font-size: 1.25em;
 }
 
-#page-mod-simplequiz2-view #simplequiz_container .answers h3,
-#page-mod-simplequiz2-view #simplequiz_container .answers h4,
-#page-mod-simplequiz2-view #simplequiz_container .answers h5 {
+.simplequiz2-player #simplequiz_container .answers h3,
+.simplequiz2-player #simplequiz_container .answers h4,
+.simplequiz2-player #simplequiz_container .answers h5 {
     font-family: sans-serif;
     font-variant: none;
 }
 
 /* Question prompt + shared metrics with legacy class names on controls. */
-#page-mod-simplequiz2-view #simplequiz_container .question-text,
-#page-mod-simplequiz2-view #simplequiz_container .check-answer,
-#page-mod-simplequiz2-view #simplequiz_container .next-question,
-#page-mod-simplequiz2-view #simplequiz_container .restart {
+.simplequiz2-player #simplequiz_container .question-text,
+.simplequiz2-player #simplequiz_container .check-answer,
+.simplequiz2-player #simplequiz_container .next-question,
+.simplequiz2-player #simplequiz_container .restart {
     position: relative;
     margin: 20px auto;
     padding: 5px 0;
@@ -182,59 +238,59 @@
     color: #000;
 }
 
-#page-mod-simplequiz2-view #simplequiz_container .question-text {
+.simplequiz2-player #simplequiz_container .question-text {
     text-align: left;
     font-style: normal;
     font-weight: bold;
 }
 
-#page-mod-simplequiz2-view #simplequiz_container .question-text h3,
-#page-mod-simplequiz2-view #simplequiz_container .question-text h4,
-#page-mod-simplequiz2-view #simplequiz_container .question-text h5 {
+.simplequiz2-player #simplequiz_container .question-text h3,
+.simplequiz2-player #simplequiz_container .question-text h4,
+.simplequiz2-player #simplequiz_container .question-text h5 {
     font-family: sans-serif;
     font-variant: none;
 }
 
-#page-mod-simplequiz2-view #simplequiz_container .question-text:focus,
-#page-mod-simplequiz2-view #simplequiz_container .question-text:focus-visible {
+.simplequiz2-player #simplequiz_container .question-text:focus,
+.simplequiz2-player #simplequiz_container .question-text:focus-visible {
     outline: 0;
 }
 
-#page-mod-simplequiz2-view #simplequiz_container .question-text .question-rank {
+.simplequiz2-player #simplequiz_container .question-text .question-rank {
     display: block;
     font-size: 1.5rem;
     color: #108df0;
     color: var(--primary, #108df0);
 }
 
-#page-mod-simplequiz2-view #simplequiz_container .question-text > p {
+.simplequiz2-player #simplequiz_container .question-text > p {
     display: inline-block;
 }
 
-#page-mod-simplequiz2-view #simplequiz_container .question-status {
+.simplequiz2-player #simplequiz_container .question-status {
     text-align: center;
     font-size: 1.25em;
     font-style: normal;
     font-weight: bold;
 }
 
-#page-mod-simplequiz2-view #simplequiz_container .question-status.question-status-success {
+.simplequiz2-player #simplequiz_container .question-status.question-status-success {
     color: #28a745;
     color: var(--success, #28a745);
 }
 
-#page-mod-simplequiz2-view #simplequiz_container .question-status.question-status-partial {
+.simplequiz2-player #simplequiz_container .question-status.question-status-partial {
     color: #f0ad4e;
     color: var(--warning, #f0ad4e);
 }
 
-#page-mod-simplequiz2-view #simplequiz_container .question-status.question-status-fail {
+.simplequiz2-player #simplequiz_container .question-status.question-status-fail {
     color: #dc3545;
     color: var(--danger, #dc3545);
 }
 
 /* Answer rows (click targets). */
-#page-mod-simplequiz2-view #simplequiz_container .answer-container {
+.simplequiz2-player #simplequiz_container .answer-container {
     position: relative;
     margin: 5px auto;
     padding: 25px;
@@ -247,16 +303,16 @@
     background-color: white;
 }
 
-#page-mod-simplequiz2-view #simplequiz_container .answer-container:hover {
+.simplequiz2-player #simplequiz_container .answer-container:hover {
     background: #f8f8f8;
 }
 
-#page-mod-simplequiz2-view #simplequiz_container .answer-container[disabled] {
+.simplequiz2-player #simplequiz_container .answer-container[disabled] {
     color: inherit;
 }
 
-#page-mod-simplequiz2-view #simplequiz_container .answer-container.selected,
-#page-mod-simplequiz2-view #simplequiz_container .answer-container.selected p {
+.simplequiz2-player #simplequiz_container .answer-container.selected,
+.simplequiz2-player #simplequiz_container .answer-container.selected p {
     font-weight: bold;
     color: #108df0;
     color: var(--primary, #108df0);
@@ -265,20 +321,20 @@
     background-color: #dedede;
 }
 
-#page-mod-simplequiz2-view #simplequiz_container .answer-container .answer-order {
+.simplequiz2-player #simplequiz_container .answer-container .answer-order {
     color: black;
 }
 
-#page-mod-simplequiz2-view #simplequiz_container .answer-container .answer-text {
+.simplequiz2-player #simplequiz_container .answer-container .answer-text {
     display: block;
     text-align: left;
 }
 
-#page-mod-simplequiz2-view #simplequiz_container .answer-container .answer-text > * {
+.simplequiz2-player #simplequiz_container .answer-container .answer-text > * {
     display: inline;
 }
 
-#page-mod-simplequiz2-view #simplequiz_container .answer-container::after {
+.simplequiz2-player #simplequiz_container .answer-container::after {
     position: absolute;
     top: 0;
     right: 10px;
@@ -292,15 +348,15 @@
 }
 
 @media (max-width: 768px) {
-    #page-mod-simplequiz2-view #simplequiz_container .answer-container::after {
+    .simplequiz2-player #simplequiz_container .answer-container::after {
         width: 30px;
         height: 30px;
         background-size: 30px;
     }
 }
 
-#page-mod-simplequiz2-view #simplequiz_container .answer-container.question-success,
-#page-mod-simplequiz2-view #simplequiz_container .answer-container.question-success p {
+.simplequiz2-player #simplequiz_container .answer-container.question-success,
+.simplequiz2-player #simplequiz_container .answer-container.question-success p {
     color: white;
     background-color: #28a745;
     background-color: var(--success, #28a745);
@@ -309,15 +365,15 @@
     font-weight: bold;
 }
 
-#page-mod-simplequiz2-view #simplequiz_container .answer-container.question-success::after {
+.simplequiz2-player #simplequiz_container .answer-container.question-success::after {
     right: 30px;
     content: "";
-    background-image: url([[pix:mod_simplequiz2|tick]]);
+    background-image: url("pix/tick.png");
     filter: brightness(0) invert(1);
 }
 
-#page-mod-simplequiz2-view #simplequiz_container .answer-container.question-fail,
-#page-mod-simplequiz2-view #simplequiz_container .answer-container.question-fail p {
+.simplequiz2-player #simplequiz_container .answer-container.question-fail,
+.simplequiz2-player #simplequiz_container .answer-container.question-fail p {
     color: white;
     background-color: #dc3545;
     background-color: var(--danger, #dc3545);
@@ -326,18 +382,19 @@
     font-weight: bold;
 }
 
-#page-mod-simplequiz2-view #simplequiz_container .answer-container.question-fail::after {
+.simplequiz2-player #simplequiz_container .answer-container.question-fail::after {
     right: 30px;
     content: "";
-    background-image: url([[pix:mod_simplequiz2|cross]]);
+    background-image: url("pix/cross.png");
     filter: brightness(0) invert(1);
 }
 
 /* Primary actions (check / next / restart / results). */
-#page-mod-simplequiz2-view #simplequiz_container button.check-answer,
-#page-mod-simplequiz2-view #simplequiz_container button.next-question,
-#page-mod-simplequiz2-view #simplequiz_container button.restart,
-#page-mod-simplequiz2-view #simplequiz_container button.show-results {
+.simplequiz2-player #simplequiz_container button.check-answer,
+.simplequiz2-player #simplequiz_container button.next-question,
+.simplequiz2-player #simplequiz_container button.restart,
+.simplequiz2-player #simplequiz_container button.finish-embed,
+.simplequiz2-player #simplequiz_container button.show-results {
     margin: 20px auto;
     padding: 15px;
     width: auto;
@@ -353,8 +410,8 @@
     background-color: var(--primary, #108df0);
 }
 
-#page-mod-simplequiz2-view #simplequiz_container button.next-question,
-#page-mod-simplequiz2-view #simplequiz_container button.show-results {
+.simplequiz2-player #simplequiz_container button.next-question,
+.simplequiz2-player #simplequiz_container button.show-results {
     display: none;
 }
 

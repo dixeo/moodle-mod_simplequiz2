@@ -70,3 +70,4 @@ $string['session_expired_title'] = 'Sessione scaduta';
 $string['show-results'] = 'Risultati';
 $string['simplequiz2:addinstance'] = 'Aggiungi un\'attività MCQ';
 $string['simplequiz2:view'] = 'Visualizza un\'attività MCQ';
+$string['embed_finish'] = 'Termina';

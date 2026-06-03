@@ -55,7 +55,7 @@ final class lib_test extends \advanced_testcase {
     public function test_prepare_question_from_mod_form_skips_empty_tinymce_markup(): void {
         $this->setAdminUser();
         $course = $this->getDataGenerator()->create_course();
-        $generator = $this->getDataGenerator()->get_plugin_generator('simplequiz2');
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_simplequiz2');
 
         $quiz = $generator->create_instance(['course' => $course->id]);
 
@@ -92,7 +92,7 @@ final class lib_test extends \advanced_testcase {
     public function test_prepare_question_from_mod_form_multiple_questions(): void {
         $this->setAdminUser();
         $course = $this->getDataGenerator()->create_course();
-        $generator = $this->getDataGenerator()->get_plugin_generator('simplequiz2');
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_simplequiz2');
 
         $quiz = $generator->create_instance(['course' => $course->id]);
 

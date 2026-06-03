@@ -49,17 +49,10 @@ final class custom_completion_test extends \advanced_testcase {
      * Sort order lists minimum attempts with standard completion rules.
      */
     public function test_get_sort_order_includes_min_attempts(): void {
-        $this->setAdminUser();
-        $course = $this->getDataGenerator()->create_course();
-        $generator = $this->getDataGenerator()->get_plugin_generator('simplequiz2');
-        $quiz = $generator->create_instance([
-            'course' => $course->id,
-            'completionminattempts' => 2,
-        ]);
-        $modinfo = get_fast_modinfo($course);
-        $cminfo = $modinfo->get_cm(get_coursemodule_from_instance('simplequiz2', $quiz->id, $course->id, false, MUST_EXIST)->id);
-        $cminfo->customdata = ['customcompletionrules' => ['completionminattempts' => 2]];
-        $completion = new custom_completion($cminfo, 0, null);
+        $mockcminfo = $this->getMockBuilder(\cm_info::class)
+            ->disableOriginalConstructor()
+            ->getMock();
+        $completion = new custom_completion($mockcminfo, 0);
         $order = $completion->get_sort_order();
 
         $this->assertContains('completionminattempts', $order);

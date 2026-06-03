@@ -26,6 +26,8 @@ namespace mod_simplequiz2\output;
 
 defined('MOODLE_INTERNAL') || die();
 
+use mod_simplequiz2\player_service;
+
 /**
  * Renderer for mod_simplequiz2 student and module views.
  */
@@ -38,31 +40,8 @@ class renderer extends \plugin_renderer_base {
      * @return bool|string
      */
     public function student_view($simplequiz, $questionsdata) {
-        $data = [];
-        foreach ($questionsdata as $order => $question) {
-            $question->order = $order;
-            $question->rank = $order + 1;
-            if ($order + 1 == count($questionsdata)) {
-                $question->islast = true;
-            }
-
-            foreach ($question->answers as $rank => $answer) {
-                $answer->order = $rank;
-            }
-
-            shuffle($question->answers);
-
-            $data[] = $question;
-        }
-
-        return $this->render_from_template('mod_simplequiz2/simplequiz_container', [
-            'name' => $simplequiz->__get('instance')->name,
-            'intro' => format_module_intro(
-                'simplequiz2',
-                $simplequiz->__get('instance'),
-                $simplequiz->__get('cm')->id
-            ),
-            'questions' => $data,
+        return player_service::render_player($questionsdata, [
+            'embed' => false,
         ]);
     }
 }

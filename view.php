@@ -67,7 +67,7 @@ if (!$decodeddata) {
         'attempt_id'       => $attemptid,
     ];
 
-    $PAGE->requires->js_call_amd('mod_simplequiz2/view', 'init', $jsparams);
+    $PAGE->requires->js_call_amd('mod_simplequiz2/activity_player', 'init', $jsparams);
 }
 
 echo $OUTPUT->footer();

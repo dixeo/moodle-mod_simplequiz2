@@ -70,3 +70,4 @@ $string['session_expired_title'] = 'Session expirée';
 $string['show-results'] = 'Résultats';
 $string['simplequiz2:addinstance'] = 'Ajouter une activité QCM';
 $string['simplequiz2:view'] = 'Voir une activité QCM';
+$string['embed_finish'] = 'Terminer';

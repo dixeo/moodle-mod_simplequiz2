@@ -69,3 +69,4 @@ $string['session_expired_title'] = 'Sitzung abgelaufen';
 $string['show-results'] = 'Ergebnisse';
 $string['simplequiz2:addinstance'] = 'Simple-Quiz-Aktivität hinzufügen';
 $string['simplequiz2:view'] = 'Simple-Quiz-Aktivität anzeigen';
+$string['embed_finish'] = 'Fertig';
