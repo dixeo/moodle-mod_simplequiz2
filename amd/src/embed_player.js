@@ -81,7 +81,7 @@ define(['core/str', 'core/ajax'], function(str, ajax) {
      * @param {string} config.questionsJson Full question JSON (server-side grading only).
      * @param {number} config.questionCount Number of questions.
      * @param {Function} [config.onAnswer]
-     * @param {Function} [config.onFinish] Called with {score, total} when Finish is clicked.
+     * @param {Function} [config.onFinish] Called with {score, total, bestAttempt} when Exit Quiz is clicked.
      * @param {Function} [config.onRestart] Called with {score, total}|null when Restart is clicked.
      * @param {Object} [config.initialState] Saved progress to restore after reload.
      * @param {Function} [config.onStateChange] Called when answer progress changes.
@@ -103,6 +103,18 @@ define(['core/str', 'core/ajax'], function(str, ajax) {
         let currentQuestionIndex = 0;
         let showingResults = false;
         let lastResult = null;
+        let bestAttempt = null;
+
+        if (initialState && initialState.bestAttempt) {
+            bestAttempt = {
+                score: initialState.bestAttempt.score,
+                total: initialState.bestAttempt.total,
+                answerResults: (initialState.bestAttempt.answerResults || []).slice(),
+                selectedAnswerIds: (initialState.bestAttempt.selectedAnswerIds || []).map(function(ids) {
+                    return (ids || []).slice();
+                }),
+            };
+        }
 
         const stringKeys = ['questionsuccess', 'questionfail', 'questionpartial', 'embed_finish'];
         let strings = {};
@@ -135,6 +147,20 @@ define(['core/str', 'core/ajax'], function(str, ajax) {
             return ajax.call([request])[0];
         };
 
+        const cloneBestAttempt = function(attempt) {
+            if (!attempt) {
+                return null;
+            }
+            return {
+                score: attempt.score,
+                total: attempt.total,
+                answerResults: attempt.answerResults.slice(),
+                selectedAnswerIds: attempt.selectedAnswerIds.map(function(ids) {
+                    return (ids || []).slice();
+                }),
+            };
+        };
+
         const emitStateChange = function() {
             onStateChange({
                 answerResults: answerResults.slice(),
@@ -145,7 +171,101 @@ define(['core/str', 'core/ajax'], function(str, ajax) {
                 showingResults: showingResults,
                 score: lastResult ? lastResult.score : null,
                 total: questionCount,
+                bestAttempt: cloneBestAttempt(bestAttempt),
             });
+        };
+
+        const snapshotCurrentAttempt = function(score) {
+            return {
+                score: score,
+                total: questionCount,
+                answerResults: answerResults.slice(),
+                selectedAnswerIds: selectedByQuestion.map(function(ids) {
+                    return (ids || []).slice();
+                }),
+            };
+        };
+
+        const maybeUpdateBestAttempt = function(attempt) {
+            if (!bestAttempt || attempt.score > bestAttempt.score) {
+                bestAttempt = attempt;
+            }
+        };
+
+        const scorePercent = function(score, total) {
+            if (!total) {
+                return 0;
+            }
+            return Math.round((score / total) * 100);
+        };
+
+        const renderEmbedResults = async function(currentScore, bestScore) {
+            const [completeLabel, bestLabel] = await str.get_strings([
+                {
+                    key: 'embed_result_complete',
+                    component: 'mod_simplequiz2',
+                    param: {
+                        score: currentScore,
+                        total: questionCount,
+                        percent: scorePercent(currentScore, questionCount),
+                    },
+                },
+                {
+                    key: 'embed_result_best',
+                    component: 'mod_simplequiz2',
+                    param: {
+                        score: bestScore,
+                        total: questionCount,
+                        percent: scorePercent(bestScore, questionCount),
+                    },
+                },
+            ]);
+
+            const resultContainer = root.querySelector('#simplequiz-result');
+            if (!resultContainer) {
+                return;
+            }
+
+            const currentScoreEl = resultContainer.querySelector('.current-score');
+            const bestScoreEl = resultContainer.querySelector('.best-score');
+            if (currentScoreEl) {
+                currentScoreEl.innerHTML = '<strong>' + completeLabel + '</strong>';
+            }
+            if (bestScoreEl) {
+                bestScoreEl.textContent = bestLabel;
+            }
+        };
+
+        const showResultsPanel = async function() {
+            let score = 0;
+            answerResults.forEach(function(correct) {
+                if (correct) {
+                    score++;
+                }
+            });
+
+            maybeUpdateBestAttempt(snapshotCurrentAttempt(score));
+
+            const questionsContainer = root.querySelector('#simplequiz-questions');
+            const resultContainer = root.querySelector('#simplequiz-result');
+            if (questionsContainer) {
+                questionsContainer.style.display = 'none';
+            }
+            if (resultContainer) {
+                resultContainer.style.display = 'flex';
+            }
+            if (finishBtn) {
+                finishBtn.style.display = 'inline-block';
+            }
+
+            await renderEmbedResults(score, bestAttempt.score);
+
+            showingResults = true;
+            lastResult = {
+                score: score,
+                total: questionCount,
+            };
+            emitStateChange();
         };
 
         /**
@@ -286,11 +406,15 @@ define(['core/str', 'core/ajax'], function(str, ajax) {
             finishBtn.className = 'finish-embed';
             finishBtn.style.display = 'none';
             loadStrings.then(function() {
-                finishBtn.textContent = strings.embed_finish || 'Finish';
+                finishBtn.textContent = strings.embed_finish || 'Exit Quiz';
             });
             finishBtn.addEventListener('click', function() {
                 if (lastResult) {
-                    onFinish(lastResult);
+                    onFinish({
+                        score: lastResult.score,
+                        total: lastResult.total,
+                        bestAttempt: cloneBestAttempt(bestAttempt),
+                    });
                 }
             });
             actionsWrap.appendChild(finishBtn);
@@ -409,35 +533,7 @@ define(['core/str', 'core/ajax'], function(str, ajax) {
         const showResultsBtn = root.querySelector('#simplequiz_container button.show-results');
         if (showResultsBtn) {
             showResultsBtn.addEventListener('click', function() {
-                let score = 0;
-                answerResults.forEach(function(correct) {
-                    if (correct) {
-                        score++;
-                    }
-                });
-
-                const questionsContainer = root.querySelector('#simplequiz-questions');
-                const resultContainer = root.querySelector('#simplequiz-result');
-                if (questionsContainer) {
-                    questionsContainer.style.display = 'none';
-                }
-                if (resultContainer) {
-                    resultContainer.style.display = 'flex';
-                    const currentScore = resultContainer.querySelector('.current-score');
-                    if (currentScore) {
-                        currentScore.textContent = score + ' / ' + questionCount;
-                    }
-                }
-                if (finishBtn) {
-                    finishBtn.style.display = 'inline-block';
-                }
-
-                showingResults = true;
-                lastResult = {
-                    score: score,
-                    total: questionCount,
-                };
-                emitStateChange();
+                showResultsPanel();
             });
         }
 
@@ -487,16 +583,14 @@ define(['core/str', 'core/ajax'], function(str, ajax) {
                     }
                     if (resultContainer) {
                         resultContainer.style.display = 'flex';
-                        const currentScore = resultContainer.querySelector('.current-score');
-                        if (currentScore) {
-                            currentScore.textContent = score + ' / ' + questionCount;
-                        }
                     }
                     if (finishBtn) {
                         finishBtn.style.display = 'inline-block';
                     }
                     showingResults = true;
                     lastResult = {score: score, total: questionCount};
+                    const bestScore = bestAttempt ? bestAttempt.score : score;
+                    await renderEmbedResults(score, bestScore);
                 } else {
                     const allAnswered = questionCount > 0 &&
                         savedResults.length >= questionCount &&

@@ -307,7 +307,7 @@
 .simplequiz2-embed.simplequiz2-player #simplequiz_container .show-results {
     margin: 0 auto;
     margin-top: 12px;
-    font-size: 16px;
+    font-size: 15px;
     padding: 10px 15px;
 }
 
@@ -319,7 +319,7 @@
     padding: 0.75rem 2.5rem 0.75rem 0.75rem;
     margin: 0.35rem auto;
     border-radius: 12px;
-    font-size: 16px;
+    font-size: 15px;
 }
 
 .simplequiz2-embed.simplequiz2-player #simplequiz_container .question-status {
@@ -331,24 +331,35 @@
     font-size: 1rem;
 }
 
+.simplequiz2-embed.simplequiz2-player #simplequiz_container #simplequiz-result #details {
+    width: 100%;
+    position: relative;
+    margin: 0 -20%;
+}
+
 .simplequiz2-embed.simplequiz2-player #simplequiz_container #simplequiz-result #details .simplequiz2-embed__result-actions {
     display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: center;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
     gap: 12px;
+    width: 100%;
     margin-top: 12px;
 }
 
 .simplequiz2-embed.simplequiz2-player #simplequiz_container #simplequiz-result #details .simplequiz2-embed__result-actions button.restart,
 .simplequiz2-embed.simplequiz2-player #simplequiz_container #simplequiz-result #details .simplequiz2-embed__result-actions button.finish-embed {
-    display: inline-block;
+    display: block;
+    width: 100%;
     margin: 0;
 }
 
-.simplequiz2-embed.simplequiz2-player #simplequiz_container #simplequiz-result .best-score {
-    display: none;
+.simplequiz2-embed.simplequiz2-player #simplequiz_container #simplequiz-result #details .current-score {
+    margin-bottom: 8px;
+}
+
+.simplequiz2-embed.simplequiz2-player #simplequiz_container #simplequiz-result #details .best-score {
+    margin-top: 8px;
+    font-weight: bold;
 }
 
 /* Result panel (hidden until JS shows it). */
@@ -595,7 +606,7 @@
 .simplequiz2-player #simplequiz_container button.finish-embed,
 .simplequiz2-player #simplequiz_container button.show-results {
     margin: 20px auto;
-    padding: 15px;
+    padding: 10px 20px;
     width: auto;
     height: auto;
     border: none;
@@ -612,6 +623,11 @@
 .simplequiz2-player #simplequiz_container button.next-question,
 .simplequiz2-player #simplequiz_container button.show-results {
     display: none;
+}
+
+.simplequiz2-player #simplequiz_container button.restart,
+.simplequiz2-player #simplequiz_container button.finish-embed {
+    width: 100%;
 }
 
 /* -------------------------------------------------------------------------
