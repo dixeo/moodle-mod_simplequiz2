@@ -1,0 +1,45 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template mod_simplequiz2/question_block_start
+    @copyright 2026 Dixeo (contact@dixeo.com)
+
+    Opening markup for one question block (heading, toolbar, summary, warnings).
+
+    Context variables:
+    * questionid - Question index
+    * title - Visible question title
+    * hascontent - Whether the slot has any stored content
+    * summaryhtml - Rendered question summary HTML
+    * buttons - Toolbar button contexts
+    * errornotenough - Not enough answers error string
+    * errornoright - No correct answer error string
+}}
+<div class="simplequiz2-question-block-start" data-simplequiz2-block-start="{{questionid}}" data-questionid="{{questionid}}">
+    <div class="simplequiz2-question-chrome">
+        <div class="simplequiz2-question-head">
+            <h3 class="simplequiz2-question-title">{{title}}</h3>
+        {{> mod_simplequiz2/edit_toolbar }}
+    </div>
+        <div class="simplequiz2-question-meta {{^hascontent}}d-none{{/hascontent}}" data-questionid="{{questionid}}" data-has-content="{{#hascontent}}1{{/hascontent}}{{^hascontent}}0{{/hascontent}}" hidden aria-hidden="true"></div>
+        <div class="header-questiontext" data-questionid="{{questionid}}">
+            {{{summaryhtml}}}
+        </div>
+        <div class="error_not_enough_answers alert alert-danger">{{errornotenough}}</div>
+        <div class="error_no_right_answer alert alert-danger">{{errornoright}}</div>
+    </div>
+    <div class="simplequiz2-question-editors d-none">

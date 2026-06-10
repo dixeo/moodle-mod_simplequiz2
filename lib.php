@@ -27,6 +27,13 @@ define('SIMPLE_QUIZ2_MAX_QUESTION_NB', 25);
 define('SIMPLE_QUIZ2_MAX_ANSWER_NB', 5);
 define('SIMPLE_QUIZ2_GRADE_MAX', 100);
 
+/** Combined feedback outcome: fully correct. */
+define('SIMPLE_QUIZ2_FEEDBACK_CORRECT', 'correct');
+/** Combined feedback outcome: partially correct. */
+define('SIMPLE_QUIZ2_FEEDBACK_PARTIAL', 'partial');
+/** Combined feedback outcome: incorrect. */
+define('SIMPLE_QUIZ2_FEEDBACK_INCORRECT', 'incorrect');
+
 defined('MOODLE_INTERNAL') || die;
 
 require_once($CFG->libdir . '/completionlib.php');
@@ -478,6 +485,150 @@ function simplequiz2_pluginfile($course, $cm, $context, $filearea, $args, $force
 }
 
 /**
+ * File item id for correct feedback on a question (1-based question item id).
+ *
+ * @param int $questionitemid Question file item id (order + 1).
+ * @return int
+ */
+function simplequiz2_correct_feedback_itemid(int $questionitemid): int {
+    return $questionitemid * 10 + 6;
+}
+
+/**
+ * File item id for incorrect feedback on a question (1-based question item id).
+ *
+ * @param int $questionitemid Question file item id (order + 1).
+ * @return int
+ */
+function simplequiz2_incorrect_feedback_itemid(int $questionitemid): int {
+    return $questionitemid * 10 + 7;
+}
+
+/**
+ * File item id for partially correct feedback on a question (1-based question item id).
+ *
+ * @param int $questionitemid Question file item id (order + 1).
+ * @return int
+ */
+function simplequiz2_partiallycorrect_feedback_itemid(int $questionitemid): int {
+    return $questionitemid * 10 + 8;
+}
+
+/**
+ * Map grading booleans to a Moodle-aligned combined feedback outcome.
+ *
+ * @param bool $iscorrect Fully correct answer.
+ * @param bool $haspartialcorrect At least one correct selection but not fully correct.
+ * @return string One of SIMPLE_QUIZ2_FEEDBACK_* constants.
+ */
+function simplequiz2_feedback_outcome_from_grading(bool $iscorrect, bool $haspartialcorrect): string {
+    if ($iscorrect) {
+        return SIMPLE_QUIZ2_FEEDBACK_CORRECT;
+    }
+    if ($haspartialcorrect) {
+        return SIMPLE_QUIZ2_FEEDBACK_PARTIAL;
+    }
+    return SIMPLE_QUIZ2_FEEDBACK_INCORRECT;
+}
+
+/**
+ * File item id for a combined feedback field on a question.
+ *
+ * @param int $questionitemid Question file item id (order + 1).
+ * @param string $outcome One of SIMPLE_QUIZ2_FEEDBACK_* constants.
+ * @return int
+ */
+function simplequiz2_feedback_itemid_for_outcome(int $questionitemid, string $outcome): int {
+    switch ($outcome) {
+        case SIMPLE_QUIZ2_FEEDBACK_CORRECT:
+            return simplequiz2_correct_feedback_itemid($questionitemid);
+        case SIMPLE_QUIZ2_FEEDBACK_PARTIAL:
+            return simplequiz2_partiallycorrect_feedback_itemid($questionitemid);
+        default:
+            return simplequiz2_incorrect_feedback_itemid($questionitemid);
+    }
+}
+
+/**
+ * Raw stored HTML for a combined feedback outcome on a question.
+ *
+ * @param object $question Normalized question object.
+ * @param string $outcome One of SIMPLE_QUIZ2_FEEDBACK_* constants.
+ * @return string
+ */
+function simplequiz2_get_raw_feedback_for_outcome(object $question, string $outcome): string {
+    $question = simplequiz2_normalize_question($question);
+    switch ($outcome) {
+        case SIMPLE_QUIZ2_FEEDBACK_CORRECT:
+            return $question->correctfeedback;
+        case SIMPLE_QUIZ2_FEEDBACK_PARTIAL:
+            return $question->partiallycorrectfeedback;
+        default:
+            return $question->incorrectfeedback;
+    }
+}
+
+/**
+ * Ensure question object has feedback fields as strings (backwards compatible).
+ *
+ * @param object $question Question from JSON decode.
+ * @return object
+ */
+function simplequiz2_normalize_question(object $question): object {
+    if (!isset($question->correctfeedback) || $question->correctfeedback === null) {
+        $question->correctfeedback = '';
+    } else {
+        $question->correctfeedback = (string) $question->correctfeedback;
+    }
+
+    if (!isset($question->incorrectfeedback) || $question->incorrectfeedback === null) {
+        $question->incorrectfeedback = '';
+    } else {
+        $question->incorrectfeedback = (string) $question->incorrectfeedback;
+    }
+
+    if (!isset($question->partiallycorrectfeedback) || $question->partiallycorrectfeedback === null) {
+        $question->partiallycorrectfeedback = '';
+    } else {
+        $question->partiallycorrectfeedback = (string) $question->partiallycorrectfeedback;
+    }
+
+    return $question;
+}
+
+/**
+ * Rewrite pluginfile URLs and format one HTML field for display.
+ *
+ * @param string $html Stored HTML with @@PLUGINFILE@@ refs.
+ * @param \context $context Module context.
+ * @param int $itemid File area item id.
+ * @return string
+ */
+function simplequiz2_format_stored_html(string $html, \context $context, int $itemid): string {
+    global $CFG;
+    require_once("{$CFG->libdir}/filelib.php");
+
+    $options = [
+        'noclean' => true,
+        'para'    => false,
+        'filter'  => true,
+        'context' => $context,
+    ];
+
+    $rewritten = file_rewrite_pluginfile_urls(
+        $html,
+        'pluginfile.php',
+        $context->id,
+        'mod_simplequiz2',
+        'data',
+        $itemid,
+        $options
+    );
+
+    return trim(format_text($rewritten, FORMAT_HTML, $options, null));
+}
+
+/**
  * Prepare simple quiz data from mform and store draft file
  * return [0 => ["questiontext" => $text, "answers" => [ 0 => ["text" => blabla, "iscorrect" => 0/1] ]
  *
@@ -529,8 +680,38 @@ function simplequiz2_prepare_question_from_mod_form(int $cmid, $data) {
             $answeritemid++;
         }
 
+        $question->correctfeedback = '';
+        if (!empty($questionrawdata['correctfeedback'])
+                && !\mod_simplequiz2\util\editor_content::is_empty($questionrawdata['correctfeedback']['text'] ?? '')) {
+            $question->correctfeedback = simplequiz2_save_editor_files(
+                $context->id,
+                simplequiz2_correct_feedback_itemid($questionitemid),
+                $questionrawdata['correctfeedback']
+            );
+        }
+
+        $question->partiallycorrectfeedback = '';
+        if (!empty($questionrawdata['partiallycorrectfeedback'])
+                && !\mod_simplequiz2\util\editor_content::is_empty($questionrawdata['partiallycorrectfeedback']['text'] ?? '')) {
+            $question->partiallycorrectfeedback = simplequiz2_save_editor_files(
+                $context->id,
+                simplequiz2_partiallycorrect_feedback_itemid($questionitemid),
+                $questionrawdata['partiallycorrectfeedback']
+            );
+        }
+
+        $question->incorrectfeedback = '';
+        if (!empty($questionrawdata['incorrectfeedback'])
+                && !\mod_simplequiz2\util\editor_content::is_empty($questionrawdata['incorrectfeedback']['text'] ?? '')) {
+            $question->incorrectfeedback = simplequiz2_save_editor_files(
+                $context->id,
+                simplequiz2_incorrect_feedback_itemid($questionitemid),
+                $questionrawdata['incorrectfeedback']
+            );
+        }
+
         // Add question at correct order.
-        $questions[$questionrawdata['questionorder']] = $question;
+        $questions[$questionrawdata['questionorder']] = simplequiz2_normalize_question($question);
     }
 
     // Fix questions order in the array and return it.
@@ -557,6 +738,34 @@ function simplequiz2_save_editor_files(int $contextid, $newitemid, array $editor
 }
 
 /**
+ * Resolve formatted feedback HTML for a question outcome.
+ *
+ * @param object $question Normalized question object.
+ * @param int $questionorder Zero-based question index.
+ * @param int $cmid Course module id.
+ * @param string $outcome One of SIMPLE_QUIZ2_FEEDBACK_* constants.
+ * @return string Empty string when no feedback is configured.
+ */
+function simplequiz2_get_feedback_for_outcome(
+    object $question,
+    int $questionorder,
+    int $cmid,
+    string $outcome
+): string {
+    $rawfeedback = simplequiz2_get_raw_feedback_for_outcome($question, $outcome);
+
+    if (\mod_simplequiz2\util\editor_content::is_empty($rawfeedback)) {
+        return '';
+    }
+
+    $questionitemid = $questionorder + 1;
+    $context = \context_module::instance($cmid);
+    $itemid = simplequiz2_feedback_itemid_for_outcome($questionitemid, $outcome);
+
+    return simplequiz2_format_stored_html($rawfeedback, $context, $itemid);
+}
+
+/**
  * Rewrite @@PLUGINFILE@@ to pluginfile.php/xxxx
  *
  * @param array $questions
@@ -579,39 +788,55 @@ function simplequiz2_rewrite_pluginfile_urls($questions, int $cmid) {
 
     // Rename all @@PLUGINFILE@@ link with pluginfile.php.
     foreach ($questions as $order => $questiondata) {
+        if (is_array($questiondata)) {
+            $questiondata = (object) $questiondata;
+        }
+        $questiondata = simplequiz2_normalize_question($questiondata);
         $questionitemid = $order + 1;
 
-        // Question text.
-        $questiontext = file_rewrite_pluginfile_urls(
-            $questiondata->text,
-            'pluginfile.php',
-            $context->id,
-            'mod_simplequiz2',
-            'data',
-            $questionitemid,
-            $options
-        );
-        $questiontext = trim(format_text($questiontext, FORMAT_HTML, $options, null));
-
-        $questions[$order]->text = $questiontext;
+        $questiondata->text = simplequiz2_format_stored_html($questiondata->text, $context, $questionitemid);
 
         // Answers.
         foreach ($questiondata->answers as $answerorder => $answerdata) {
-            $answeritemid = $questionitemid . ($answerorder + 1);
-
-            $answertext = file_rewrite_pluginfile_urls(
-                $answerdata->text,
-                'pluginfile.php',
-                $context->id,
-                'mod_simplequiz2',
-                'data',
-                $answeritemid,
-                $options
-            );
-            $answertext = trim(format_text($answertext, FORMAT_HTML, $options, null));
-
-            $questions[$order]->answers[$answerorder]->text = $answertext;
+            if (is_array($answerdata)) {
+                $answerdata = (object) $answerdata;
+            }
+            $answeritemid = (int) ($questionitemid . ($answerorder + 1));
+            $answerdata->text = simplequiz2_format_stored_html($answerdata->text, $context, $answeritemid);
+            $questiondata->answers[$answerorder] = $answerdata;
         }
+
+        if (!\mod_simplequiz2\util\editor_content::is_empty($questiondata->correctfeedback)) {
+            $questiondata->correctfeedback = simplequiz2_format_stored_html(
+                $questiondata->correctfeedback,
+                $context,
+                simplequiz2_correct_feedback_itemid($questionitemid)
+            );
+        } else {
+            $questiondata->correctfeedback = '';
+        }
+
+        if (!\mod_simplequiz2\util\editor_content::is_empty($questiondata->partiallycorrectfeedback)) {
+            $questiondata->partiallycorrectfeedback = simplequiz2_format_stored_html(
+                $questiondata->partiallycorrectfeedback,
+                $context,
+                simplequiz2_partiallycorrect_feedback_itemid($questionitemid)
+            );
+        } else {
+            $questiondata->partiallycorrectfeedback = '';
+        }
+
+        if (!\mod_simplequiz2\util\editor_content::is_empty($questiondata->incorrectfeedback)) {
+            $questiondata->incorrectfeedback = simplequiz2_format_stored_html(
+                $questiondata->incorrectfeedback,
+                $context,
+                simplequiz2_incorrect_feedback_itemid($questionitemid)
+            );
+        } else {
+            $questiondata->incorrectfeedback = '';
+        }
+
+        $questions[$order] = $questiondata;
     }
 
     return $questions;

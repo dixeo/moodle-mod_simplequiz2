@@ -45,6 +45,9 @@ class mod_simplequiz2_generator extends testing_module_generator {
         $questions = [
             (object) [
                 'text' => '<p>Sample question</p>',
+                'correctfeedback' => '',
+                'partiallycorrectfeedback' => '',
+                'incorrectfeedback' => '',
                 'answers' => [
                     (object) ['text' => '<p>Correct</p>', 'iscorrect' => 1],
                     (object) ['text' => '<p>Wrong</p>', 'iscorrect' => 0],

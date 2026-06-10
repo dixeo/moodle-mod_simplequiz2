@@ -86,46 +86,31 @@ class simplequiz_api extends mod_api {
         $attemptid = $this->get_param('attemptid', FILTER_VALIDATE_INT);
         $useranwsers = $this->get_param('answers');
 
-        $results = [];
-        $iscorrect = true;
-
         $simplequiz = new simplequiz($cmid);
         $this->assert_attempt_belongs_to_user($attemptid, $simplequiz);
 
-        // One correct answers is required per question.
-        if ($useranwsers == '') {
-            $iscorrect = false;
-        } else {
-            // Get simplequiz data.
-            $questiondata = (array) json_decode($simplequiz->__get('instance')->questions);
+        $questiondata = (array) json_decode($simplequiz->__get('instance')->questions);
+        $question = isset($questiondata[$questionid])
+            ? simplequiz2_normalize_question($questiondata[$questionid])
+            : null;
 
-            // Prepare question data.
-            $question = $questiondata[$questionid];
-            $useranwsers = explode(',', $useranwsers);
-
-            foreach ($question->answers as $answerid => $answer) {
-                // If the answer is correct, user must have selected it.
-                if ($answer->iscorrect == 1 && !in_array($answerid, $useranwsers)) {
-                    $iscorrect = false;
-                    continue;
-                }
-
-                // If the answers if not correct, user must have not selected it.
-                if ($answer->iscorrect == 0 && in_array($answerid, $useranwsers)) {
-                    $iscorrect = false;
-                    $results[$answerid] = false;
-                    continue;
-                }
-
-                // Else the answers if correct.
-                if (in_array($answerid, $useranwsers)) {
-                    $results[$answerid] = true;
-                }
-            }
+        $grading = ['iscorrect' => false, 'results' => [], 'haspartialcorrect' => false];
+        if ($question) {
+            $grading = question_grading_service::grade_question($question, $useranwsers ?? '');
         }
+
+        $iscorrect = $grading['iscorrect'];
+        $results = $grading['results'];
+        $haspartialcorrect = $grading['haspartialcorrect'];
 
         // Update attempt with the new answer.
         $simplequiz->add_attempt_answer($attemptid, $questionid, $iscorrect);
+
+        $feedback = '';
+        if ($question) {
+            $outcome = simplequiz2_feedback_outcome_from_grading($iscorrect, $haspartialcorrect);
+            $feedback = simplequiz2_get_feedback_for_outcome($question, $questionid, $cmid, $outcome);
+        }
 
         // Return data to the client.
         $this->send(200, 'Get question results', [
@@ -133,6 +118,7 @@ class simplequiz_api extends mod_api {
             'results' => $results,
             // True if answers are corrects.
             'iscorrect' => $iscorrect,
+            'feedback' => $feedback,
         ]);
     }
 

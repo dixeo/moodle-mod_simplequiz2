@@ -28,70 +28,254 @@
  */
 
 /* -------------------------------------------------------------------------
- * Mod edit form (#page-mod-simplequiz2-mod, modedit.php)
+ * Mod edit form (#page-mod-simplequiz2-mod, course/modedit.php)
  * ------------------------------------------------------------------------- */
 
-#page-mod-simplequiz2-mod form[action="modedit.php"] iframe {
+#page-mod-simplequiz2-mod form.mform iframe {
     max-width: 100%;
     position: relative;
 }
 
-#page-mod-simplequiz2-mod form[action="modedit.php"] .delete-simplequestion {
-    margin-left: 10px;
-}
-
-#page-mod-simplequiz2-mod form[action="modedit.php"] .btn:disabled {
+#page-mod-simplequiz2-mod form.mform .btn:disabled {
     cursor: not-allowed;
 }
 
-#page-mod-simplequiz2-mod form[action="modedit.php"] .header-questiontext {
+#page-mod-simplequiz2-mod form.mform .simplequiz2-question-block-start {
+    margin: 20px 0;
+    padding: 20px 30px;
+    border: 1px solid #e3e3e3;
+    border-radius: 20px;
+    background: #fff;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-question-block > .fitem:has(.simplequiz2-question-block-start) .felement {
+    width: 100%;
+    max-width: 100%;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-question-head {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-question-title {
+    margin: 0;
+}
+
+#page-mod-simplequiz2-mod form.mform .header-questiontext {
     display: block;
     width: 100%;
-    max-height: 2.8em;
-    margin: 0 0 8px 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    margin: 0 0 16px 0;
     font-size: 14px;
-    line-height: 1.4;
+    line-height: 1.5;
 }
 
-#page-mod-simplequiz2-mod form[action="modedit.php"] .header-info-container {
+#page-mod-simplequiz2-mod form.mform .simplequiz2-summary-section {
+    margin-top: 8px;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-summary-question {
+    font-size: 1.3rem;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-summary-heading {
+    margin-bottom: 4px;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-summary-list {
+    margin: 0;
+    padding-left: 1.5rem;
+    list-style: none;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-summary-list li p {
+    margin: 0;
+    display: inline;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-summary-answer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-summary-check {
+    flex-shrink: 0;
+    margin-left: -16px;
+    color: #28a745;
+    color: var(--success, #28a745);
+    font-weight: bold;
+}
+
+#page-mod-simplequiz2-mod form.mform .error_not_enough_answers,
+#page-mod-simplequiz2-mod form.mform .error_no_right_answer {
+    display: none;
+    width: 100%;
+}
+
+#page-mod-simplequiz2-mod form.mform .error_not_enough_answers.simplequiz2-error-visible,
+#page-mod-simplequiz2-mod form.mform .error_no_right_answer.simplequiz2-error-visible {
+    display: block;
+    width: 100%;
+}
+
+/* Hide deferred editor fields until the question wrapper is in edit mode. */
+#page-mod-simplequiz2-mod form.mform .fitem:has(textarea.simplequiz2-deferred-editor),
+#page-mod-simplequiz2-mod form.mform .fitem:has(input[id*="_correctanswers_"]),
+#page-mod-simplequiz2-mod form.mform .fitem:has(input[name*="questions"][name$="[format]"]),
+#page-mod-simplequiz2-mod form.mform .fitem:has(input[name*="questions"][name$="[itemid]"]) {
+    display: none !important;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-edit-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease-in-out;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-question-block-start:hover .simplequiz2-edit-toolbar,
+#page-mod-simplequiz2-mod form.mform .simplequiz2-question-wrapper.simplequiz2-editing .simplequiz2-edit-toolbar {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+@media (max-width: 767.98px) {
+    #page-mod-simplequiz2-mod form.mform .simplequiz2-edit-toolbar {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-question-editors:not(.d-none) {
     display: flex;
     flex-direction: column;
-    flex-grow: 1;
-    flex-wrap: wrap;
-    justify-content: flex-start;
-    align-items: stretch;
-    margin-bottom: 15px;
-    margin-left: 53px;
+    width: 100%;
 }
 
-#page-mod-simplequiz2-mod form[action="modedit.php"] .header-btn {
-    float: right;
+#page-mod-simplequiz2-mod form.mform .simplequiz2-question-editors:not(.d-none) .simplequiz2-editor-fitem {
+    display: flex !important;
+    width: 100%;
 }
 
-#page-mod-simplequiz2-mod form[action="modedit.php"] .error_not_enough_answers,
-#page-mod-simplequiz2-mod form[action="modedit.php"] .error_no_right_answer {
-    display: none;
+#page-mod-simplequiz2-mod form.mform .simplequiz2-answer-group {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin-bottom: 1rem;
 }
 
-#page-mod-simplequiz2-mod form[action="modedit.php"] [data-toggle="collapse"] ~ h3 {
-    white-space: nowrap;
+#page-mod-simplequiz2-mod form.mform .simplequiz2-answer-group > .fitem:has(input[id*="_correctanswers_"]) {
+    margin-bottom: 0;
 }
 
-#page-mod-simplequiz2-mod form[action="modedit.php"] .simplequiz2-right-answer .tox-tinymce,
-#page-mod-simplequiz2-mod form[action="modedit.php"] .simplequiz2-right-answer .editor_atto {
+#page-mod-simplequiz2-mod form.mform .simplequiz2-answer-group > .fitem:has(input[id*="_correctanswers_"]) .col-md-3:not(.col-form-label) {
+    flex: 0 0 auto;
+    width: auto;
+    max-width: none;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-answer-group > .fitem:has(textarea.simplequiz2-deferred-editor) .felement {
+    width: 100%;
+    max-width: 100%;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-right-answer .tox-tinymce,
+#page-mod-simplequiz2-mod form.mform .simplequiz2-right-answer .editor_atto {
     background-color: #98e086;
 }
 
-#page-mod-simplequiz2-mod form[action="modedit.php"] .simplequiz2-wrong-answer .tox-tinymce,
-#page-mod-simplequiz2-mod form[action="modedit.php"] .simplequiz2-wrong-answer .editor_atto {
+#page-mod-simplequiz2-mod form.mform .simplequiz2-wrong-answer .tox-tinymce,
+#page-mod-simplequiz2-mod form.mform .simplequiz2-wrong-answer .editor_atto {
     background-color: #e08b86;
 }
 
-#page-mod-simplequiz2-mod form[action="modedit.php"] .editor_atto_toolbar,
-#page-mod-simplequiz2-mod form[action="modedit.php"] .simplequiz2-answer .tox-editor-header {
+#page-mod-simplequiz2-mod form.mform .editor_atto_toolbar,
+#page-mod-simplequiz2-mod form.mform .simplequiz2-answer .tox-editor-header {
     opacity: 0.8;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-edit-toolbar .simplequiz2-toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid #ced4da;
+    border-radius: 0;
+    background-color: #fff;
+    color: #495057;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-edit-toolbar .simplequiz2-toolbar-btn--icon-only {
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-edit-toolbar .simplequiz2-toolbar-btn:not(.simplequiz2-toolbar-btn--icon-only) {
+    height: 2.25rem;
+    padding: 0 12px;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-edit-toolbar .simplequiz2-btn-save {
+    background-color: #28a745;
+    background-color: var(--success, #28a745);
+    border-color: #28a745;
+    border-color: var(--success, #28a745);
+    color: #fff;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-edit-toolbar .simplequiz2-btn-save:hover:not(:disabled) {
+    background-color: #218838;
+    border-color: #1e7e34;
+    color: #fff;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-edit-toolbar .simplequiz2-btn-discard {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: #fff;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-edit-toolbar .simplequiz2-btn-discard:hover:not(:disabled) {
+    background-color: #5a6268;
+    border-color: #545b62;
+    color: #fff;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-edit-toolbar .delete-simplequestion:hover:not(:disabled) {
+    background-color: #dc3545;
+    background-color: var(--danger, #dc3545);
+    border-color: #dc3545;
+    border-color: var(--danger, #dc3545);
+    color: #fff;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-edit-toolbar .simplequiz2-toolbar-btn--icon-only:hover:not(:disabled):not(.delete-simplequestion) {
+    background-color: #f8f9fa;
+    border-color: #adb5bd;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-edit-toolbar .simplequiz2-toolbar-btn:disabled {
+    opacity: 0.5;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-edit-toolbar .simplequiz2-toolbar-btn .icon {
+    margin: 0;
+    font-size: 1rem;
+}
+
+#page-mod-simplequiz2-mod form.mform .simplequiz2-edit-toolbar .simplequiz2-toolbar-btn__label {
+    font-size: 0.875rem;
+    line-height: 1;
 }
 
 /* -------------------------------------------------------------------------
@@ -239,6 +423,7 @@
 }
 
 .simplequiz2-player #simplequiz_container .question-text {
+    margin: 0;
     text-align: left;
     font-style: normal;
     font-weight: bold;
@@ -268,10 +453,24 @@
 }
 
 .simplequiz2-player #simplequiz_container .question-status {
-    text-align: center;
+    margin-top: 20px;
+    margin-bottom: 4px;
+    padding: 0 25px;
+    text-align: left;
     font-size: 1.25em;
     font-style: normal;
     font-weight: bold;
+}
+
+.simplequiz2-player #simplequiz_container .question-feedback {
+    margin: 4px auto 12px;
+    padding: 0 25px;
+    max-width: 100%;
+    text-align: left;
+    font-size: 1.1em;
+    font-weight: normal;
+    border-radius: 6px;
+    background: transparent;
 }
 
 .simplequiz2-player #simplequiz_container .question-status.question-status-success {
@@ -293,7 +492,7 @@
 .simplequiz2-player #simplequiz_container .answer-container {
     position: relative;
     margin: 5px auto;
-    padding: 25px;
+    padding: 15px;
     width: 100%;
     height: auto;
     border: 2px solid #eaecef;

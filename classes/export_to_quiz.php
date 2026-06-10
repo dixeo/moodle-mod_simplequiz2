@@ -46,6 +46,7 @@ require_once($CFG->dirroot . '/course/modlib.php');
 require_once($CFG->libdir . '/completionlib.php');
 require_once($CFG->dirroot . '/mod/quiz/locallib.php');
 require_once($CFG->dirroot . '/question/type/multichoice/questiontype.php');
+require_once($CFG->dirroot . '/mod/simplequiz2/lib.php');
 
 /**
  * Builds a standard quiz activity from a simplequiz2 instance.
@@ -167,14 +168,12 @@ class export_to_quiz {
         // Loop on simplequiz question to create real moodle question.
         $questions = (array) json_decode($this->oldmod->questions);
         foreach ($questions as $questionorder => $questiondata) {
-            $question = (object) [
-                'text' => $questiondata->text,
-                'order' => $questionorder,
-            ];
+            if (is_array($questiondata)) {
+                $questiondata = (object) $questiondata;
+            }
+            $questiondata = simplequiz2_normalize_question($questiondata);
 
-            // Create question from question text and all answers.
-            $answers = $questiondata->answers;
-            $newquestion = $this->create_question($question, $answers);
+            $newquestion = $this->create_question($questiondata, $questionorder);
 
             // Add question to new quiz with grade equal to grade of activity divided by number of questions.
             $questiongrade = isset($this->oldgradeitem) ? $this->oldgradeitem->grademax / count($questions) : null;
@@ -370,13 +369,13 @@ class export_to_quiz {
      * Create question with question text, one correct answer text and multiple other wrong answers
      * in new quiz
      *
-     * @param stdClass $questiondata Question fields for export.
-     * @param array $answersdata List of answer objects (text, iscorrect, ...).
+     * @param stdClass $questiondata Question fields for export (text, answers, combined feedback).
+     * @param int $questionorder Zero-based question index in the source activity.
      * @return object
      * @throws coding_exception
      * @throws dml_exception
      */
-    private function create_question($questiondata, $answersdata) {
+    private function create_question($questiondata, int $questionorder) {
         global $USER, $DB;
 
         // Prepare question params.
@@ -391,6 +390,8 @@ class export_to_quiz {
 
         $answers = [];
         $fractions = [];
+
+        $answersdata = $questiondata->answers;
 
         // Count correct answers for fraction grade.
         $nbcorrectanswers = 0;
@@ -449,21 +450,21 @@ class export_to_quiz {
             'answer' => $answers,
             'fraction' => $fractions,
             'feedback' => $feedbacks,
-            'correctfeedback' => [
-                'text' => 'Votre réponse est correcte.',
-                'format' => 1,
-                'itemid' => 0,
-            ],
-            'partiallycorrectfeedback' => [
-                'text' => 'Votre réponse est partiellement correcte.',
-                'format' => 1,
-                'itemid' => 0,
-            ],
-            'incorrectfeedback' => [
-                'text' => 'Votre réponse est incorrecte.',
-                'format' => 1,
-                'itemid' => 0,
-            ],
+            'correctfeedback' => $this->map_combined_feedback_field(
+                $questiondata,
+                'correctfeedback',
+                'correctfeedbackdefault'
+            ),
+            'partiallycorrectfeedback' => $this->map_combined_feedback_field(
+                $questiondata,
+                'partiallycorrectfeedback',
+                'partiallycorrectfeedbackdefault'
+            ),
+            'incorrectfeedback' => $this->map_combined_feedback_field(
+                $questiondata,
+                'incorrectfeedback',
+                'incorrectfeedbackdefault'
+            ),
             'shownumcorrect' => 1,
             'penalty' => 0,
             'numhints' => 0,
@@ -484,7 +485,55 @@ class export_to_quiz {
             $this->duplicate_question_files_from_text($answer->id, $answer->answer, 'answer');
         }
 
+        $this->duplicate_combined_feedback_files($newquestion->id, $questiondata, $questionorder);
+
         return $newquestion;
+    }
+
+    /**
+     * Build a Moodle combined-feedback editor field from SimpleQuiz2 stored HTML.
+     *
+     * @param stdClass $questiondata Source question.
+     * @param string $field Property name on the question object.
+     * @param string $defaultlangkey Moodle core lang string key used when the field is empty.
+     * @return array
+     */
+    private function map_combined_feedback_field(stdClass $questiondata, string $field, string $defaultlangkey): array {
+        $question = simplequiz2_normalize_question($questiondata);
+        $text = $question->$field ?? '';
+        if (\mod_simplequiz2\util\editor_content::is_empty($text)) {
+            $text = get_string($defaultlangkey, 'question');
+        }
+
+        return [
+            'text' => $text,
+            'format' => FORMAT_HTML,
+            'itemid' => 0,
+        ];
+    }
+
+    /**
+     * Copy embedded files from SimpleQuiz2 combined feedback into the question bank.
+     *
+     * @param int $newquestionid Saved question id.
+     * @param stdClass $questiondata Source question.
+     * @param int $questionorder Zero-based question index.
+     * @return void
+     */
+    private function duplicate_combined_feedback_files(int $newquestionid, stdClass $questiondata, int $questionorder): void {
+        $question = simplequiz2_normalize_question($questiondata);
+        $feedbackareas = [
+            'correctfeedback' => 'correctfeedback',
+            'partiallycorrectfeedback' => 'partiallycorrectfeedback',
+            'incorrectfeedback' => 'incorrectfeedback',
+        ];
+
+        foreach ($feedbackareas as $field => $filearea) {
+            $text = $question->$field ?? '';
+            if (!\mod_simplequiz2\util\editor_content::is_empty($text)) {
+                $this->duplicate_question_files_from_text($newquestionid, $text, $filearea);
+            }
+        }
     }
 
     /**

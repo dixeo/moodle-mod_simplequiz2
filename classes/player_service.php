@@ -11,6 +11,9 @@ namespace mod_simplequiz2;
 
 defined('MOODLE_INTERNAL') || die();
 
+global $CFG;
+require_once($CFG->dirroot . '/mod/simplequiz2/lib.php');
+
 /**
  * Prepares question data and renders the student player template.
  */
@@ -32,10 +35,16 @@ class player_service {
                 $question = (object) $question;
             }
 
+            $question = simplequiz2_normalize_question($question);
             $displayquestion = clone $question;
             $displayquestion->order = $order;
             $displayquestion->rank = $order + 1;
             $displayquestion->islast = ($order + 1 === $count);
+            unset(
+                $displayquestion->correctfeedback,
+                $displayquestion->partiallycorrectfeedback,
+                $displayquestion->incorrectfeedback
+            );
 
             $answers = [];
             foreach ($displayquestion->answers as $rank => $answer) {

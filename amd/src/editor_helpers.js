@@ -21,10 +21,18 @@
  * @license     http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-define(['editor_tiny/editor', 'editor_tiny/options'], function(Tiny, Options) {
+define([
+    'editor_tiny/editor',
+    'editor_tiny/options',
+    'core/ajax',
+    'tiny_autosave/options',
+], function(Tiny, Options, Ajax, AutosaveOptions) {
 
     /** @type {Object|null} TinyMCE base options from PHP (includes plugins). */
     let tinyBaseOptions = null;
+
+    /** @type {Map<string, Promise<void>>} In-flight slot resets keyed by question id. */
+    const resetSlotPromises = new Map();
 
     /**
      * @param {Object} options Base TinyMCE options from mod_form.php.
@@ -39,7 +47,7 @@ define(['editor_tiny/editor', 'editor_tiny/options'], function(Tiny, Options) {
      */
     const getReferenceEditor = (textarea) => {
         const refTextarea = document.querySelector(
-            'fieldset[id^="id_question_header_"]:not([hidden]) textarea[id$="_text"]'
+            '.simplequiz2-question-block.simplequiz2-editing textarea[id$="_text"]'
         );
         if (!refTextarea || refTextarea === textarea) {
             return null;
@@ -64,6 +72,95 @@ define(['editor_tiny/editor', 'editor_tiny/options'], function(Tiny, Options) {
     };
 
     /**
+     * Update the companion [itemid] hidden input for a deferred editor field.
+     *
+     * @param {string} elementId Element id without id_ prefix.
+     * @param {number} itemid New draft item id.
+     */
+    const setDraftItemIdForElement = (elementId, itemid) => {
+        const textarea = document.getElementById('id_' + elementId);
+        if (!textarea) {
+            return;
+        }
+        const name = textarea.getAttribute('name');
+        if (!name || !name.endsWith('[text]')) {
+            return;
+        }
+        const itemidInput = document.querySelector(`input[name="${name.replace(/\[text\]$/, '[itemid]')}"]`);
+        if (itemidInput) {
+            itemidInput.value = String(itemid);
+        }
+    };
+
+    /**
+     * Allocate fresh Moodle user draft item ids.
+     *
+     * @param {number} count Number of ids required.
+     * @return {Promise<number[]>}
+     */
+    const fetchUnusedDraftItemIds = async(count) => {
+        if (count < 1) {
+            return [];
+        }
+        try {
+            const requests = Array.from({length: count}, () => ({
+                methodname: 'mod_simplequiz2_get_unused_draft_itemids',
+                args: {},
+            }));
+            const responses = await Promise.all(Ajax.call(requests));
+            const itemids = responses.map((response) => {
+                if (!response) {
+                    return null;
+                }
+                const raw = response.itemid ?? (
+                    Array.isArray(response.itemids) && response.itemids.length > 0 ? response.itemids[0] : null
+                );
+                const itemid = parseInt(raw, 10);
+                return itemid > 0 ? itemid : null;
+            }).filter((itemid) => itemid !== null);
+            return itemids;
+        } catch (e) {
+            return [];
+        }
+    };
+
+    /**
+     * Clear all editors in a question slot and point each at a fresh empty draft area.
+     *
+     * @param {string} questionId Question index.
+     * @return {Promise<void>}
+     */
+    const resetQuestionSlotEditors = async(questionId) => {
+        if (resetSlotPromises.has(questionId)) {
+            await resetSlotPromises.get(questionId);
+            return;
+        }
+
+        const resetPromise = (async() => {
+            const elementIds = getEditorElementIds(questionId);
+
+            await clearAutosaveSessionsForQuestion(questionId);
+            await removeEditorsForQuestion(questionId);
+
+            const itemids = await fetchUnusedDraftItemIds(elementIds.length);
+            elementIds.forEach((elementId, index) => {
+                setEditorHtml(elementId, '');
+                const newItemid = itemids[index] || null;
+                if (newItemid) {
+                    setDraftItemIdForElement(elementId, newItemid);
+                }
+            });
+        })();
+
+        resetSlotPromises.set(questionId, resetPromise);
+        try {
+            await resetPromise;
+        } finally {
+            resetSlotPromises.delete(questionId);
+        }
+    };
+
+    /**
      * Build full setup options for TinyMCE (partial options break plugin loading).
      *
      * @param {HTMLTextAreaElement} textarea
@@ -78,7 +175,7 @@ define(['editor_tiny/editor', 'editor_tiny/options'], function(Tiny, Options) {
         return {
             css: tinyBaseOptions.css,
             context: inst ? Options.getContextId(inst) : tinyBaseOptions.context,
-            draftitemid: inst ? Options.getDraftItemId(inst) : getDraftItemIdFromForm(textarea),
+            draftitemid: getDraftItemIdFromForm(textarea),
             filepicker: inst ? Options.getFilepickers(inst) : {},
             currentLanguage: refInst ? Options.getCurrentLanguage(refInst) : (tinyBaseOptions.currentLanguage || 'en'),
             language: refInst ? Options.getMoodleLang(refInst) : {},
@@ -116,8 +213,9 @@ define(['editor_tiny/editor', 'editor_tiny/options'], function(Tiny, Options) {
      * Remove TinyMCE for one textarea (Moodle removes on next tick to avoid Firefox errors).
      *
      * @param {HTMLTextAreaElement|null} textarea
+     * @return {Promise<void>}
      */
-    const removeEditorForTextarea = (textarea) => {
+    const removeEditorForTextarea = async(textarea) => {
         if (!textarea) {
             return;
         }
@@ -126,25 +224,127 @@ define(['editor_tiny/editor', 'editor_tiny/options'], function(Tiny, Options) {
         if (!editor) {
             return;
         }
-        editor.setContent('');
+        try {
+            await Promise.all(Ajax.call([{
+                methodname: 'tiny_autosave_reset_session',
+                args: {
+                    contextid: AutosaveOptions.getContextId(editor),
+                    pagehash: AutosaveOptions.getPageHash(editor),
+                    pageinstance: AutosaveOptions.getPageInstance(editor),
+                    elementid: editor.targetElm.id,
+                },
+            }]));
+        } catch (e) {
+            // Autosave reset is best-effort; continue tearing down the editor.
+        }
         editor.save();
-        setTimeout(() => {
-            if (!editor.removed) {
-                editor.remove();
-            }
-        }, 0);
+        await new Promise((resolve) => {
+            editor.once('remove', resolve);
+            setTimeout(() => {
+                if (!editor.removed) {
+                    editor.remove();
+                } else {
+                    resolve();
+                }
+            }, 0);
+        });
     };
 
     /**
-     * Tear down TinyMCE for all editors in a question slot (e.g. on delete or before re-add).
+     * All editor element ids for one question (without id_ prefix).
      *
      * @param {string} questionId Question index
+     * @return {string[]}
      */
-    const removeEditorsForQuestion = (questionId) => {
-        removeEditorForTextarea(getTextarea(questionTextElementId(questionId)));
+    const getEditorElementIds = (questionId) => {
+        const ids = [questionTextElementId(questionId)];
         for (let answerId = 0; answerId < 5; answerId++) {
-            removeEditorForTextarea(getTextarea(answerElementId(questionId, answerId)));
+            ids.push(answerElementId(questionId, answerId));
         }
+        ids.push(correctFeedbackElementId(questionId));
+        ids.push(partiallyCorrectFeedbackElementId(questionId));
+        ids.push(incorrectFeedbackElementId(questionId));
+        return ids;
+    };
+
+    /**
+     * Resolve Tiny Autosave session parameters for a question slot.
+     *
+     * @param {string} questionId Question index.
+     * @return {{contextid: number, pagehash: string, pageinstance: string}|null}
+     */
+    const getAutosaveSessionContext = (questionId) => {
+        for (const elementId of getEditorElementIds(questionId)) {
+            const textarea = getTextarea(elementId);
+            const editor = textarea ? Tiny.getInstanceForElement(textarea) : null;
+            if (editor) {
+                return {
+                    contextid: AutosaveOptions.getContextId(editor),
+                    pagehash: AutosaveOptions.getPageHash(editor),
+                    pageinstance: AutosaveOptions.getPageInstance(editor),
+                };
+            }
+        }
+
+        const anyTextarea = document.querySelector('textarea.simplequiz2-deferred-editor');
+        if (anyTextarea) {
+            const editor = Tiny.getInstanceForElement(anyTextarea);
+            if (editor) {
+                return {
+                    contextid: AutosaveOptions.getContextId(editor),
+                    pagehash: AutosaveOptions.getPageHash(editor),
+                    pageinstance: AutosaveOptions.getPageInstance(editor),
+                };
+            }
+        }
+
+        if (tinyBaseOptions && tinyBaseOptions.context) {
+            const autosaveConfig = tinyBaseOptions.plugins?.['tiny_autosave/plugin']?.config || {};
+            return {
+                contextid: tinyBaseOptions.context,
+                pagehash: autosaveConfig.pagehash || '',
+                pageinstance: autosaveConfig.pageinstance || '',
+            };
+        }
+
+        return null;
+    };
+
+    /**
+     * Delete Tiny Autosave drafts for every editor field in a question slot.
+     *
+     * @param {string} questionId Question index.
+     * @return {Promise<void>}
+     */
+    const clearAutosaveSessionsForQuestion = async(questionId) => {
+        const sessionContext = getAutosaveSessionContext(questionId);
+        if (!sessionContext) {
+            return;
+        }
+
+        const requests = getEditorElementIds(questionId).map((elementId) => ({
+            methodname: 'tiny_autosave_reset_session',
+            args: {
+                contextid: sessionContext.contextid,
+                pagehash: sessionContext.pagehash,
+                pageinstance: sessionContext.pageinstance,
+                elementid: 'id_' + elementId,
+            },
+        }));
+
+        await Promise.all(Ajax.call(requests));
+    };
+
+    /**
+     * Tear down TinyMCE for all editors in a question slot.
+     *
+     * @param {string} questionId Question index
+     * @return {Promise<void>}
+     */
+    const removeEditorsForQuestion = async(questionId) => {
+        await Promise.all(getEditorElementIds(questionId).map((elementId) =>
+            removeEditorForTextarea(getTextarea(elementId))
+        ));
     };
 
     /**
@@ -195,7 +395,7 @@ define(['editor_tiny/editor', 'editor_tiny/options'], function(Tiny, Options) {
     };
 
     /**
-     * Initialise TinyMCE editors for one question after its fieldset/collapse is visible.
+     * Initialise TinyMCE editors for one question in edit mode.
      *
      * @param {string} questionId Question index
      * @param {Function|null} [onAnswerChange] Called when an answer field changes (for form validation).
@@ -203,16 +403,12 @@ define(['editor_tiny/editor', 'editor_tiny/options'], function(Tiny, Options) {
      */
     const initEditorsForQuestion = async(questionId, onAnswerChange = null) => {
         const textareas = [];
-        const questionText = getTextarea(questionTextElementId(questionId));
-        if (questionText) {
-            textareas.push(questionText);
-        }
-        for (let answerId = 0; answerId < 5; answerId++) {
-            const answerTextarea = getTextarea(answerElementId(questionId, answerId));
-            if (answerTextarea) {
-                textareas.push(answerTextarea);
+        getEditorElementIds(questionId).forEach((elementId) => {
+            const textarea = getTextarea(elementId);
+            if (textarea) {
+                textareas.push(textarea);
             }
-        }
+        });
 
         for (const textarea of textareas) {
             const elementId = textarea.id.replace(/^id_/, '');
@@ -228,6 +424,8 @@ define(['editor_tiny/editor', 'editor_tiny/options'], function(Tiny, Options) {
             }
             const existing = Tiny.getInstanceForElement(textarea);
             if (existing) {
+                existing.setContent(textarea.value || '');
+                existing.save();
                 applyEditorSizeFix(existing, textarea);
             } else {
                 await initEditorForTextarea(textarea);
@@ -239,24 +437,14 @@ define(['editor_tiny/editor', 'editor_tiny/options'], function(Tiny, Options) {
     };
 
     /**
-     * Run editor init after the question collapse panel is visible (Bootstrap collapse).
+     * Initialise editors for one question (alias kept for callers).
      *
      * @param {string} questionId Question index
-     * @param {HTMLElement} fieldset Question fieldset
      * @param {Function|null} [onAnswerChange] Called when an answer field changes
      * @return {Promise<void>}
      */
-    const scheduleInitEditorsForQuestion = (questionId, fieldset, onAnswerChange = null) => new Promise((resolve) => {
-        const panel = fieldset.querySelector('.collapse');
-        const run = () => initEditorsForQuestion(questionId, onAnswerChange).then(resolve);
-
-        if (!panel || panel.classList.contains('show')) {
-            run();
-            return;
-        }
-
-        panel.addEventListener('shown.bs.collapse', () => run(), {once: true});
-    });
+    const scheduleInitEditorsForQuestion = (questionId, onAnswerChange = null) =>
+        initEditorsForQuestion(questionId, onAnswerChange);
 
     /**
      * Strip empty paragraph/break markup then trim.
@@ -288,6 +476,24 @@ define(['editor_tiny/editor', 'editor_tiny/options'], function(Tiny, Options) {
      * @return {string}
      */
     const answerElementId = (questionId, answerId) => 'questions' + questionId + '_answers_' + answerId;
+
+    /**
+     * @param {string} questionId Question index
+     * @return {string}
+     */
+    const correctFeedbackElementId = (questionId) => 'questions' + questionId + '_correctfeedback';
+
+    /**
+     * @param {string} questionId Question index
+     * @return {string}
+     */
+    const partiallyCorrectFeedbackElementId = (questionId) => 'questions' + questionId + '_partiallycorrectfeedback';
+
+    /**
+     * @param {string} questionId Question index
+     * @return {string}
+     */
+    const incorrectFeedbackElementId = (questionId) => 'questions' + questionId + '_incorrectfeedback';
 
     /**
      * @param {string} elementId Element id without id_ prefix
@@ -322,6 +528,7 @@ define(['editor_tiny/editor', 'editor_tiny/options'], function(Tiny, Options) {
         }
         const editor = Tiny.getInstanceForElement(textarea);
         if (editor) {
+            editor.save();
             return editor.getContent();
         }
         return textarea.value;
@@ -368,23 +575,173 @@ define(['editor_tiny/editor', 'editor_tiny/options'], function(Tiny, Options) {
     };
 
     /**
-     * Plain text preview for the collapsed question header.
+     * Snapshot all editor HTML for a question.
      *
      * @param {string} questionId Question index
-     * @return {string}
+     * @return {Object<string, string>}
      */
-    const getQuestionTextPlain = (questionId) => {
-        const atto = getAttoContent(questionTextElementId(questionId));
-        if (atto) {
-            return atto.innerText;
+    const snapshotQuestionContent = (questionId) => {
+        const snapshot = {};
+        getEditorElementIds(questionId).forEach((elementId) => {
+            snapshot[elementId] = getEditorHtml(elementId);
+        });
+        return snapshot;
+    };
+
+    /**
+     * Restore a snapshot onto question editors.
+     *
+     * @param {string} questionId Question index
+     * @param {Object<string, string>} snapshot Element id to HTML map.
+     */
+    const restoreQuestionSnapshot = (questionId, snapshot) => {
+        getEditorElementIds(questionId).forEach((elementId) => {
+            if (Object.prototype.hasOwnProperty.call(snapshot, elementId)) {
+                setEditorHtml(elementId, snapshot[elementId]);
+            }
+        });
+    };
+
+    /**
+     * Find a hidden companion input fitem by exact field name.
+     *
+     * @param {HTMLElement} block Question block container.
+     * @param {string} fieldName Full input name.
+     * @return {HTMLElement|null}
+     */
+    const findCompanionFitem = (block, fieldName) => {
+        const input = Array.from(block.querySelectorAll('input[type="hidden"]'))
+            .find((element) => element.name === fieldName);
+        return input ? input.closest('.fitem') : null;
+    };
+
+    const markQuestionEditorFitems = (block, questionId) => {
+        block.querySelectorAll('textarea.simplequiz2-deferred-editor').forEach((textarea) => {
+            const fitem = textarea.closest('.fitem');
+            if (fitem) {
+                fitem.classList.add('simplequiz2-editor-fitem');
+            }
+            const name = textarea.getAttribute('name');
+            if (!name || !name.endsWith('[text]')) {
+                return;
+            }
+            const base = name.slice(0, -'[text]'.length);
+            ['[format]', '[itemid]'].forEach((suffix) => {
+                const companion = findCompanionFitem(block, base + suffix);
+                if (companion) {
+                    companion.classList.add('simplequiz2-editor-fitem');
+                }
+            });
+        });
+
+        block.querySelectorAll("input[id^='id_questions" + questionId + "_correctanswers_']").forEach((checkbox) => {
+            const fitem = checkbox.closest('.fitem');
+            if (fitem) {
+                fitem.classList.add('simplequiz2-editor-fitem');
+            }
+        });
+    };
+
+    /**
+     * @param {HTMLElement} block Question block container.
+     * @param {string} elementId Editor textarea id without the id_ prefix.
+     * @return {Element|null}
+     */
+    const findEditorFitem = (block, elementId) => {
+        const textarea = block.querySelector('#id_' + elementId);
+        return textarea ? textarea.closest('.fitem') : null;
+    };
+
+    /**
+     * @param {HTMLElement} block Question block container.
+     * @param {string} fieldBase Field name prefix ending before [format] or [itemid].
+     * @return {Element|null}
+     */
+    const findCompanionFitems = (block, fieldBase) => {
+        return {
+            format: findCompanionFitem(block, fieldBase + '[format]'),
+            itemid: findCompanionFitem(block, fieldBase + '[itemid]'),
+        };
+    };
+
+    /**
+     * Append fitem nodes into a parent if they exist and are not already there.
+     *
+     * @param {HTMLElement} parent Destination parent.
+     * @param {...(Element|null)} fitems Fitem nodes to move.
+     */
+    const appendFitems = (parent, ...fitems) => {
+        fitems.forEach((fitem) => {
+            if (fitem) {
+                parent.appendChild(fitem);
+            }
+        });
+    };
+
+    /**
+     * Group editor fitems into a single fields wrapper inside the question block.
+     *
+     * @param {HTMLElement} block Question block container.
+     */
+    const wrapQuestionEditorFields = (block) => {
+        const blockstart = block.querySelector('.simplequiz2-question-block-start');
+        if (!blockstart) {
+            return;
         }
-        const textarea = getTextarea(questionTextElementId(questionId));
-        if (!textarea) {
-            return '';
+
+        let fieldsWrap = blockstart.querySelector('.simplequiz2-question-editors');
+        if (!fieldsWrap) {
+            fieldsWrap = document.createElement('div');
+            fieldsWrap.className = 'simplequiz2-question-editors d-none';
+            blockstart.appendChild(fieldsWrap);
         }
-        const tmp = document.createElement('div');
-        tmp.innerHTML = textarea.value;
-        return tmp.innerText || '';
+
+        const questionId = block.dataset.questionid;
+
+        const questionFitem = findEditorFitem(block, questionTextElementId(questionId));
+        if (questionFitem) {
+            const companions = findCompanionFitems(block, 'questions' + questionId + '[text]');
+            appendFitems(fieldsWrap, questionFitem, companions.format, companions.itemid);
+        }
+
+        for (let answerId = 0; answerId < 5; answerId++) {
+            const group = document.createElement('div');
+            group.className = 'simplequiz2-answer-group';
+            group.dataset.answerid = String(answerId);
+
+            const answerFitem = findEditorFitem(block, answerElementId(questionId, answerId));
+            const companions = findCompanionFitems(
+                block,
+                'questions' + questionId + '[answers][' + answerId + ']'
+            );
+            appendFitems(group, answerFitem, companions.format, companions.itemid);
+
+            const checkbox = block.querySelector('#id_questions' + questionId + '_correctanswers_' + answerId);
+            const checkboxFitem = checkbox ? checkbox.closest('.fitem') : null;
+            appendFitems(group, checkboxFitem);
+
+            fieldsWrap.appendChild(group);
+        }
+
+        [
+            correctFeedbackElementId(questionId),
+            partiallyCorrectFeedbackElementId(questionId),
+            incorrectFeedbackElementId(questionId),
+        ].forEach((elementId) => {
+            const fitem = findEditorFitem(block, elementId);
+            if (!fitem) {
+                return;
+            }
+            const fieldKey = elementId.replace('questions' + questionId + '_', '');
+            const companions = findCompanionFitems(block, 'questions' + questionId + '[' + fieldKey + ']');
+            appendFitems(fieldsWrap, fitem, companions.format, companions.itemid);
+        });
+
+        block.querySelectorAll('.simplequiz2-editor-fitem').forEach((fitem) => {
+            if (!fieldsWrap.contains(fitem)) {
+                fieldsWrap.appendChild(fitem);
+            }
+        });
     };
 
     /**
@@ -419,16 +776,24 @@ define(['editor_tiny/editor', 'editor_tiny/options'], function(Tiny, Options) {
         stripEmptyHtml,
         questionTextElementId,
         answerElementId,
+        correctFeedbackElementId,
+        partiallyCorrectFeedbackElementId,
+        incorrectFeedbackElementId,
         getEditorHtml,
         setEditorHtml,
         hasEditorContent,
         isQuestionTextEditorReady,
-        getQuestionTextPlain,
         answerFieldsSelector,
         bindAnswerFieldListeners,
         initEditorsForQuestion,
         scheduleInitEditorsForQuestion,
         removeEditorsForQuestion,
         setTinyBaseOptions,
+        snapshotQuestionContent,
+        restoreQuestionSnapshot,
+        markQuestionEditorFitems,
+        wrapQuestionEditorFields,
+        resetQuestionSlotEditors,
+        getEditorElementIds,
     };
 });

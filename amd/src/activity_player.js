@@ -144,9 +144,11 @@ define([
                 answers[i].disabled = true;
             }
 
+            const feedbackEl = root.querySelector('.question-feedback[data-questionid="' + questionId + '"]');
             const statusEl = root.querySelector('.question-status[data-questionid="' + questionId + '"]');
             const statusModifierClasses = ['question-status-success', 'question-status-partial', 'question-status-fail'];
             statusEl.classList.remove(...statusModifierClasses);
+
             let status = '';
             if (data.iscorrect === true) {
                 status = this.stringCache['questionsuccess'] || '';
@@ -159,6 +161,17 @@ define([
                 statusEl.classList.add('question-status-fail');
             }
             statusEl.innerHTML = status;
+
+            const customFeedback = (data.feedback || '').trim();
+            if (feedbackEl) {
+                if (customFeedback !== '') {
+                    feedbackEl.innerHTML = customFeedback;
+                    feedbackEl.hidden = false;
+                } else {
+                    feedbackEl.innerHTML = '';
+                    feedbackEl.hidden = true;
+                }
+            }
 
             const nextquestion = root.querySelector(
                 '.question-container[data-questionid="' + (parseInt(questionId, 10) + 1) + '"]'

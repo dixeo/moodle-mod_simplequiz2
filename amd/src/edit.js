@@ -14,14 +14,30 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Activity form UI for mod_simplequiz2 (question fieldsets, reorder, warnings).
+ * Activity form UI for mod_simplequiz2 (question blocks, lazy editors, summaries).
  *
  * @module      mod_simplequiz2/edit
  * @copyright   2022 Ministère de l'Éducation nationale français; Dixeo (contact@dixeo.com)
  * @license     http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-define(['mod_simplequiz2/editor_helpers'], function(EditorHelpers) {
+define(['mod_simplequiz2/editor_helpers', 'core/str', 'core/templates'], function(EditorHelpers, str, Templates) {
+
+    const STRING_KEYS = [
+        'editquestion',
+        'savequestion',
+        'discardquestion',
+        'deletequestion',
+        'addquestion',
+        'previewanswers',
+        'previewfeedback',
+        'previewcorrect',
+        'previewpartial',
+        'previewincorrect',
+        'formquestiontitle',
+    ];
+
+    const SUMMARY_TEMPLATE = 'mod_simplequiz2/question_summary';
 
     /**
      * True if some checked "correct answer" checkbox points to an answer slot with content.
@@ -60,394 +76,664 @@ define(['mod_simplequiz2/editor_helpers'], function(EditorHelpers) {
         return count;
     };
 
+    /**
+     * Whether a question slot has any content in text, answers, or feedback fields.
+     *
+     * @param {string} questionId Question index
+     * @return {boolean}
+     */
+    const questionSlotHasContent = function(questionId) {
+        if (EditorHelpers.hasEditorContent(EditorHelpers.questionTextElementId(questionId))) {
+            return true;
+        }
+        for (let answerId = 0; answerId < 5; answerId++) {
+            if (EditorHelpers.hasEditorContent(EditorHelpers.answerElementId(questionId, answerId))) {
+                return true;
+            }
+        }
+        const feedbackIds = [
+            EditorHelpers.correctFeedbackElementId(questionId),
+            EditorHelpers.partiallyCorrectFeedbackElementId(questionId),
+            EditorHelpers.incorrectFeedbackElementId(questionId),
+        ];
+        for (let i = 0; i < feedbackIds.length; i++) {
+            if (EditorHelpers.hasEditorContent(feedbackIds[i])) {
+                return true;
+            }
+        }
+        return false;
+    };
+
     var modSimplequizEdit = {
 
-        preparedFieldsets: {},
+        activeEditQuestionId: null,
+        editSnapshots: {},
+        stringCache: {},
 
-        init: function() {
+        init: async function() {
+            const that = this;
+            const loaded = await str.get_strings(STRING_KEYS.map((key) => ({
+                key: key,
+                component: 'mod_simplequiz2',
+            })));
+            STRING_KEYS.forEach((key, index) => {
+                that.stringCache[key] = loaded[index];
+            });
 
-            var that = this;
+            await Templates.prefetchTemplates([SUMMARY_TEMPLATE]);
 
-            // Hide empty questions container
-            let questionsHeaders = document.querySelectorAll("fieldset[id^='id_question_header_']");
-            for (let i = 0; i < questionsHeaders.length; i++) {
-                let questionHeader = questionsHeaders[i];
+            that.organizeQuestionBlocks();
 
-                that.updateQuestionsBackground([i]);
+            const blocks = document.querySelectorAll('.simplequiz2-question-block');
+            for (let index = 0; index < blocks.length; index++) {
+                const block = blocks[index];
+                const questionId = block.dataset.questionid;
+                that.updateQuestionsBackground([questionId]);
 
-                // The first container is always visible
-                if (i == 0) {
-
-                    // This question can be visible and empty if this is a new activity, check his warning
-                    if (document.querySelector('input[name="coursemodule"]').value == '') {
-                        that.checkQuestionsAnswersWarnings([i]);
+                if (index === 0) {
+                    if (document.querySelector('input[name="coursemodule"]').value === '') {
+                        that.checkQuestionsAnswersWarnings([questionId]);
                     }
-
+                    await that.updateQuestionSummary(questionId);
                     continue;
                 }
 
-                // If the container has no content, hide it
-                if (questionHeader.querySelector('.question-text-editor:not(.has-content)')) {
-                    questionHeader.hidden = true;
+                const meta = that.getQuestionMeta(questionId);
+                if (!meta || meta.dataset.hasContent !== '1') {
+                    that.setQuestionBlockHidden(questionId, true);
+                    continue;
                 }
 
+                await that.updateQuestionSummary(questionId);
             }
 
-            // Question fieldset contains question text at any moment
-            that.prepareQuestionHeader();
-
-            // If the max questions number is reach, disable all add buttons
             that.checkIfCanAddQuestion();
-
-            // Add question buttons
             that.initAddQuestionButtons();
-
-            // Add delete question buttons
             that.initDeleteQuestionButtons();
+            that.initEditToolbarButtons();
+            that.refreshToolbarVisibility(null);
+        },
 
-            let fieldsets = document.querySelectorAll("fieldset[id^='id_question_header_']");
-            fieldsets.forEach(function(fieldset) {
-                fieldset.addEventListener('click', function() {
+        /**
+         * Wrap each question's form items into a single block container.
+         */
+        organizeQuestionBlocks: function() {
+            document.querySelectorAll('[data-simplequiz2-block-start]').forEach((startEl) => {
+                if (startEl.closest('.simplequiz2-question-block')) {
+                    return;
+                }
 
-                    let questionId = fieldset.id.replace('id_question_header_', '');
+                const questionId = startEl.dataset.questionid;
+                const block = document.createElement('div');
+                block.className = 'simplequiz2-question-block simplequiz2-question-wrapper';
+                block.dataset.questionid = questionId;
 
-                    // If the fieldset is already init, stop
-                    if (that.preparedFieldsets[questionId] === 1) {
-                        return;
+                const parent = startEl.parentNode;
+                if (!parent) {
+                    return;
+                }
+
+                parent.insertBefore(block, startEl);
+                block.appendChild(startEl);
+
+                // Html elements are not wrapped in .fitem; editor fitems may be siblings after block-start.
+                let next = block.nextElementSibling;
+                while (next) {
+                    if (next.hasAttribute('data-simplequiz2-block-start')) {
+                        break;
                     }
-
-                    if (!EditorHelpers.isQuestionTextEditorReady(questionId)) {
-                        return;
+                    const isBlockEnd = next.hasAttribute('data-simplequiz2-block-end') &&
+                        next.getAttribute('data-simplequiz2-block-end') === questionId;
+                    const toMove = next;
+                    next = next.nextElementSibling;
+                    block.appendChild(toMove);
+                    if (isBlockEnd) {
+                        break;
                     }
+                }
 
-                    that.preparedFieldsets[questionId] = 1;
+                EditorHelpers.markQuestionEditorFitems(block, questionId);
+                EditorHelpers.wrapQuestionEditorFields(block);
 
-                    that.updateQuestionHeader(questionId);
+                const meta = block.querySelector('.simplequiz2-question-meta[data-questionid="' + questionId + '"]');
+                const hasContent = meta && meta.dataset.hasContent === '1';
+                if (parseInt(questionId, 10) > 0 && !hasContent) {
+                    block.classList.add('d-none');
+                }
+            });
+        },
 
-                    const refreshQuestion = () => {
-                        that.checkQuestionsAnswersWarnings(false);
-                        that.updateQuestionsBackground([questionId]);
-                    };
+        isQuestionBlockHidden: function(block) {
+            return !!(block && block.classList.contains('d-none'));
+        },
 
-                    EditorHelpers.bindAnswerFieldListeners(questionId, refreshQuestion);
+        setQuestionBlockHidden: function(questionId, hidden) {
+            const block = this.getQuestionBlock(questionId);
+            if (block) {
+                block.classList.toggle('d-none', hidden);
+            }
+        },
 
-                    let checkboxs = document.querySelectorAll("input[id^='id_questions" + questionId + "_correctanswers_']");
-                    for (const checkbox of checkboxs) {
-                        checkbox.addEventListener('change', function() {
-                            that.checkQuestionsAnswersWarnings([questionId]);
-                            that.updateQuestionsBackground([questionId]);
-                        });
+        getQuestionBlock: function(questionId) {
+            return document.querySelector('.simplequiz2-question-block[data-questionid="' + questionId + '"]');
+        },
+
+        getQuestionMeta: function(questionId) {
+            const block = this.getQuestionBlock(questionId);
+            if (!block) {
+                return null;
+            }
+            return block.querySelector('.simplequiz2-question-meta[data-questionid="' + questionId + '"]');
+        },
+
+        setQuestionHasContent: function(questionId, hasContent) {
+            const meta = this.getQuestionMeta(questionId);
+            if (meta) {
+                meta.dataset.hasContent = hasContent ? '1' : '0';
+            }
+        },
+
+        refreshToolbarVisibility: function(activeEditQuestionId) {
+            document.querySelectorAll('.simplequiz2-edit-toolbar').forEach((toolbar) => {
+                const questionId = toolbar.dataset.questionid;
+                const editBtn = toolbar.querySelector('.edit-question');
+                const saveBtn = toolbar.querySelector('.save-question');
+                const discardBtn = toolbar.querySelector('.discard-question');
+                const deleteBtn = toolbar.querySelector('.delete-simplequestion');
+                const addBtn = toolbar.querySelector('.add-simplequestion');
+
+                if (activeEditQuestionId !== null) {
+                    const isActive = questionId === activeEditQuestionId;
+                    if (editBtn) {
+                        editBtn.hidden = true;
                     }
+                    if (deleteBtn) {
+                        deleteBtn.hidden = true;
+                    }
+                    if (addBtn) {
+                        addBtn.hidden = true;
+                    }
+                    if (saveBtn) {
+                        saveBtn.hidden = !isActive;
+                    }
+                    if (discardBtn) {
+                        discardBtn.hidden = !isActive;
+                    }
+                    return;
+                }
 
+                if (editBtn) {
+                    editBtn.hidden = false;
+                }
+                if (saveBtn) {
+                    saveBtn.hidden = true;
+                }
+                if (discardBtn) {
+                    discardBtn.hidden = true;
+                }
+                if (deleteBtn) {
+                    deleteBtn.hidden = (questionId === '0');
+                }
+                if (addBtn) {
+                    addBtn.hidden = false;
+                }
+            });
+        },
+
+        getQuestionSummary: function(questionId) {
+            const block = this.getQuestionBlock(questionId);
+            return block ? block.querySelector('.header-questiontext[data-questionid="' + questionId + '"]') : null;
+        },
+
+        getQuestionEditors: function(questionId) {
+            const block = this.getQuestionBlock(questionId);
+            return block ? block.querySelector('.simplequiz2-question-editors') : null;
+        },
+
+        setQuestionEditorsReady: function(questionId, ready) {
+            const block = this.getQuestionBlock(questionId);
+            if (block) {
+                block.classList.toggle('simplequiz2-editors-ready', ready);
+            }
+        },
+
+        setQuestionViewMode: function(questionId) {
+            const block = this.getQuestionBlock(questionId);
+            const summary = this.getQuestionSummary(questionId);
+            const editors = this.getQuestionEditors(questionId);
+            if (summary) {
+                summary.classList.remove('d-none');
+            }
+            if (editors) {
+                editors.classList.add('d-none');
+            }
+            if (block) {
+                block.classList.remove('simplequiz2-editing', 'simplequiz2-editors-ready');
+            }
+            this.refreshToolbarVisibility(null);
+        },
+
+        setQuestionEditMode: function(questionId) {
+            const block = this.getQuestionBlock(questionId);
+            const summary = this.getQuestionSummary(questionId);
+            const editors = this.getQuestionEditors(questionId);
+            if (summary) {
+                summary.classList.add('d-none');
+            }
+            if (editors) {
+                editors.classList.remove('d-none');
+            }
+            if (block) {
+                block.classList.add('simplequiz2-editing');
+                block.classList.remove('simplequiz2-editors-ready');
+            }
+            this.refreshToolbarVisibility(questionId);
+        },
+
+        exitEditMode: async function(questionId, restoreSnapshot) {
+            if (restoreSnapshot && this.editSnapshots[questionId]) {
+                EditorHelpers.restoreQuestionSnapshot(questionId, this.editSnapshots[questionId]);
+            }
+            delete this.editSnapshots[questionId];
+            await EditorHelpers.removeEditorsForQuestion(questionId);
+            this.setQuestionViewMode(questionId);
+            await this.updateQuestionSummary(questionId);
+            if (this.activeEditQuestionId === questionId) {
+                this.activeEditQuestionId = null;
+            }
+        },
+
+        startEditQuestion: async function(questionId) {
+            const that = this;
+
+            if (this.activeEditQuestionId !== null && this.activeEditQuestionId !== questionId) {
+                const discard = window.confirm('Discard unsaved changes on the current question?');
+                if (!discard) {
+                    return;
+                }
+                await this.exitEditMode(this.activeEditQuestionId, true);
+            }
+
+            this.editSnapshots[questionId] = EditorHelpers.snapshotQuestionContent(questionId);
+            this.activeEditQuestionId = questionId;
+            this.setQuestionEditMode(questionId);
+
+            const refreshQuestion = () => {
+                that.checkQuestionsAnswersWarnings(false);
+                that.updateQuestionsBackground([questionId]);
+            };
+
+            await EditorHelpers.initEditorsForQuestion(questionId, refreshQuestion);
+            if (this.activeEditQuestionId !== questionId) {
+                return;
+            }
+            this.setQuestionEditorsReady(questionId, true);
+            EditorHelpers.bindAnswerFieldListeners(questionId, refreshQuestion);
+
+            const checkboxs = document.querySelectorAll("input[id^='id_questions" + questionId + "_correctanswers_']");
+            checkboxs.forEach((checkbox) => {
+                checkbox.addEventListener('change', function() {
+                    that.checkQuestionsAnswersWarnings([questionId]);
+                    that.updateQuestionsBackground([questionId]);
+                });
+            });
+        },
+
+        saveEditQuestion: async function(questionId) {
+            await EditorHelpers.removeEditorsForQuestion(questionId);
+
+            await this.updateQuestionSummary(questionId);
+
+            const hasContent = questionSlotHasContent(questionId);
+            this.setQuestionHasContent(questionId, hasContent);
+
+            delete this.editSnapshots[questionId];
+            if (this.activeEditQuestionId === questionId) {
+                this.activeEditQuestionId = null;
+            }
+            this.setQuestionViewMode(questionId);
+
+            this.checkQuestionsAnswersWarnings(false);
+            this.updateQuestionsBackground([questionId]);
+        },
+
+        initEditToolbarButtons: function() {
+            const that = this;
+
+            document.querySelectorAll('.edit-question').forEach((button) => {
+                button.addEventListener('click', function() {
+                    that.startEditQuestion(button.dataset.questionid);
                 });
             });
 
+            document.querySelectorAll('.save-question').forEach((button) => {
+                button.addEventListener('click', function() {
+                    that.saveEditQuestion(button.dataset.questionid);
+                });
+            });
+
+            document.querySelectorAll('.discard-question').forEach((button) => {
+                button.addEventListener('click', function() {
+                    that.exitEditMode(button.dataset.questionid, true).then(() => {
+                        that.checkQuestionsAnswersWarnings(false);
+                        that.updateQuestionsBackground([button.dataset.questionid]);
+                    });
+                });
+            });
         },
 
-        // Prepare add question buttons
         initAddQuestionButtons: function() {
-            var that = this;
+            const that = this;
 
-            let addQuestionButtons = document.querySelectorAll('form input[type="button"].add-simplequestion');
-            addQuestionButtons.forEach(function(addQuestionButton) {
-                addQuestionButton.addEventListener('click', function() {
+            document.querySelectorAll('.add-simplequestion').forEach(function(addQuestionButton) {
+                addQuestionButton.addEventListener('click', async function() {
+                    const currentBlock = that.getQuestionBlock(addQuestionButton.dataset.questionid);
+                    const blocks = document.querySelectorAll('.simplequiz2-question-block');
 
-                    let currentFieldset = document.getElementById('id_question_header_' + addQuestionButton.dataset.questionid);
+                    for (const block of blocks) {
+                        if (that.isQuestionBlockHidden(block)) {
+                            if (currentBlock && currentBlock.parentNode) {
+                                currentBlock.after(block);
+                            }
+                            block.classList.remove('d-none');
 
-                    // Move the next hidden field at the correct place and unhide it
-                    let fieldsets = document.querySelectorAll("fieldset[id^='id_question_header_']");
-                    for (const fieldset of fieldsets) {
+                            const questionId = block.dataset.questionid;
+                            that.setQuestionHasContent(questionId, false);
 
-                        if (fieldset.hidden === true) {
-                            // Move the element after sur selected field
-                            currentFieldset.after(fieldset);
-
-                            // Unhide the fieldset
-                            fieldset.hidden = false;
-
-                            let questionId = fieldset.id.replace('id_question_header_', '');
-
-                            EditorHelpers.removeEditorsForQuestion(questionId);
-                            delete that.preparedFieldsets[questionId];
-
-                            const refreshQuestion = () => {
-                                that.checkQuestionsAnswersWarnings(false);
-                                that.updateQuestionsBackground([questionId]);
-                            };
-
-                            // TinyMCE must re-init after the collapse panel is visible, not only after hidden=false.
-                            const panel = fieldset.querySelector('.collapse');
-                            let header = fieldset.querySelector(
-                                'a[aria-expanded="false"][aria-controls^="id_question_header_"]'
-                            );
-                            let refreshPromise;
-                            if (header) {
-                                refreshPromise = EditorHelpers.scheduleInitEditorsForQuestion(
-                                    questionId,
-                                    fieldset,
-                                    refreshQuestion
-                                );
-                                header.click();
-                            } else if (panel) {
-                                panel.classList.add('show');
-                                refreshPromise = EditorHelpers.initEditorsForQuestion(questionId, refreshQuestion);
-                            } else {
-                                refreshPromise = EditorHelpers.initEditorsForQuestion(questionId, refreshQuestion);
+                            await EditorHelpers.resetQuestionSlotEditors(questionId);
+                            await that.startEditQuestion(questionId);
+                            if (that.activeEditQuestionId !== questionId) {
+                                that.setQuestionViewMode(questionId);
+                                await that.updateQuestionSummary(questionId);
                             }
 
-                            // Display warning message
                             that.checkQuestionsAnswersWarnings([questionId]);
-
-                            refreshPromise.then(() => {
-                                if (!that.preparedFieldsets[questionId]) {
-                                    that.preparedFieldsets[questionId] = 1;
-                                    that.updateQuestionHeader(questionId);
-                                    let checkboxs = document.querySelectorAll(
-                                        "input[id^='id_questions" + questionId + "_correctanswers_']"
-                                    );
-                                    for (const checkbox of checkboxs) {
-                                        checkbox.addEventListener('change', function() {
-                                            that.checkQuestionsAnswersWarnings([questionId]);
-                                            that.updateQuestionsBackground([questionId]);
-                                        });
-                                    }
-                                }
-                            });
-
                             break;
                         }
                     }
 
-                    // Check if the order are still correct and update title
                     that.fixQuestionOrder();
-
-                    // If there is only one question, hide delete buttons
                     that.checkIfCanAddQuestion();
                 });
             });
         },
 
-        // Prepare delete question buttons
         initDeleteQuestionButtons: function() {
-            var that = this;
+            const that = this;
 
-            let deleteQuestionButtons = document.querySelectorAll('form input[type="button"].delete-simplequestion');
-            deleteQuestionButtons.forEach(function(deleteQuestionButton) {
-                deleteQuestionButton.addEventListener('click', function() {
+            document.querySelectorAll('.delete-simplequestion').forEach(function(deleteQuestionButton) {
+                deleteQuestionButton.addEventListener('click', async function() {
+                    const questionId = deleteQuestionButton.dataset.questionid;
 
-                    let questionId = deleteQuestionButton.dataset.questionid;
-
-                    document.getElementById('id_question_header_' + questionId).hidden = true;
-
-                    EditorHelpers.setEditorHtml(EditorHelpers.questionTextElementId(questionId), '');
-                    document.querySelector('.header-questiontext[data-questionid="' + questionId + '"]').textContent = '';
-
-                    for (let answerId = 0; answerId < 5; answerId++) {
-                        EditorHelpers.setEditorHtml(EditorHelpers.answerElementId(questionId, answerId), '');
+                    if (that.activeEditQuestionId === questionId) {
+                        that.activeEditQuestionId = null;
+                        delete that.editSnapshots[questionId];
                     }
 
-                    EditorHelpers.removeEditorsForQuestion(questionId);
-                    delete that.preparedFieldsets[questionId];
+                    const block = that.getQuestionBlock(questionId);
+                    if (block) {
+                        block.classList.add('d-none');
+                    }
+                    that.setQuestionHasContent(questionId, false);
 
-                    let checkboxs = document.querySelectorAll("input[id^='id_questions" + questionId + "_correctanswers_']");
-                    checkboxs.forEach(checkbox => {
+                    await EditorHelpers.resetQuestionSlotEditors(questionId);
+                    delete that.editSnapshots[questionId];
+
+                    await that.updateQuestionSummary(questionId);
+
+                    document.querySelectorAll("input[id^='id_questions" + questionId + "_correctanswers_']").forEach((checkbox) => {
                         checkbox.checked = false;
                     });
 
-                    let questionsState = document.querySelectorAll(
-                        "div[id^='fitem_id_questions" + questionId + "_answers_'].simplequiz2-answer"
-                    );
-                    questionsState.forEach(function(questionState) {
-                        questionState.classList.remove("simplequiz2-right-answer");
-                        questionState.classList.remove("simplequiz2-wrong-answer");
-                    });
+                    const deleteBlock = that.getQuestionBlock(questionId);
+                    if (deleteBlock) {
+                        deleteBlock.querySelectorAll(
+                            '.simplequiz2-answer-group, [id^="fitem_id_questions' + questionId + '_answers_"]'
+                        ).forEach(function(answerEl) {
+                            answerEl.classList.remove(
+                                'simplequiz2-answer',
+                                'simplequiz2-right-answer',
+                                'simplequiz2-wrong-answer'
+                            );
+                        });
+                    }
 
                     that.fixQuestionOrder();
                     that.checkIfCanAddQuestion();
                     that.checkQuestionsAnswersWarnings(false);
                 });
             });
-
         },
 
-        // Move elements in fieldset header to better view
-        prepareQuestionHeader: function() {
-            let questionHeaders = document.querySelectorAll("fieldset[id^='id_question_header_']");
-            questionHeaders.forEach(function(questionHeader) {
-
-                let legend = questionHeader.querySelector('legend ~ div.d-flex');
-                legend.insertAdjacentHTML('afterend', '<div class="header-info-container"></div>');
-
-                let legendContainer = questionHeader.querySelector('.header-info-container');
-
-                let questionText = questionHeader.querySelector('.header-questiontext');
-                if (questionText && legendContainer) {
-                    legendContainer.prepend(questionText);
-                }
-
-                let warnings = questionHeader.querySelectorAll('.error_not_enough_answers, .error_no_right_answer');
-                warnings.forEach(warning => legendContainer.appendChild(warning));
-
-                let buttons = questionHeader.querySelectorAll('.header-btn');
-                legendContainer.insertAdjacentHTML('beforeend', '<div class="header-buttons-container"></div>');
-                let buttonsContainer = legendContainer.querySelector('.header-buttons-container');
-                buttons.forEach(button => buttonsContainer.appendChild(button));
-            });
-        },
-
-        // Question fieldset header contains question text at any moment
-        updateQuestionHeader: function(questionId) {
-            const syncHeader = () => {
-                const plain = EditorHelpers.getQuestionTextPlain(questionId);
-                document.querySelector('.header-questiontext[data-questionid="' + questionId + '"]').textContent = plain;
+        /**
+         * Build Mustache context for the question summary template from live editors.
+         *
+         * @param {string} questionId Question index
+         * @return {Object}
+         */
+        buildQuestionSummaryContext: function(questionId) {
+            const strings = this.stringCache;
+            const context = {
+                hasquestion: false,
+                questiontext: '',
+                hasanswers: false,
+                answerheading: strings.previewanswers || 'Answers',
+                answers: [],
+                hasfeedback: false,
+                feedbackheading: strings.previewfeedback || 'Feedback',
+                feedbackitems: [],
             };
 
-            const atto = document.querySelector(
-                '#id_' + EditorHelpers.questionTextElementId(questionId) + 'editable.editor_atto_content'
-            );
-            if (atto) {
-                atto.addEventListener('keyup', syncHeader);
+            const questionHtml = EditorHelpers.getEditorHtml(EditorHelpers.questionTextElementId(questionId));
+            if (EditorHelpers.stripEmptyHtml(questionHtml) !== '') {
+                context.hasquestion = true;
+                context.questiontext = questionHtml;
             }
 
-            const textarea = document.getElementById('id_' + EditorHelpers.questionTextElementId(questionId));
-            if (textarea) {
-                textarea.addEventListener('input', syncHeader);
-                textarea.addEventListener('change', syncHeader);
-            }
-        },
-
-        // Check if hidden order field and question fieldset match to what to user sees
-        fixQuestionOrder: function() {
-            let fieldsets = document.querySelectorAll("fieldset[id^='id_question_header_']");
-
-            var visibleIndex = 1;
-            for (const fieldset of fieldsets) {
-
-                if (fieldset.hidden === true) {
+            for (let answerId = 0; answerId < 5; answerId++) {
+                const answerHtml = EditorHelpers.getEditorHtml(EditorHelpers.answerElementId(questionId, answerId));
+                if (EditorHelpers.stripEmptyHtml(answerHtml) === '') {
                     continue;
                 }
+                const checkbox = document.querySelector(
+                    '#id_questions' + questionId + '_correctanswers_' + answerId
+                );
+                context.answers.push({
+                    text: answerHtml,
+                    iscorrect: !!(checkbox && checkbox.checked),
+                });
+            }
+            context.hasanswers = context.answers.length > 0;
 
-                let questionId = fieldset.id.replace('id_question_header_', '');
+            const feedbackFields = [
+                {
+                    id: EditorHelpers.correctFeedbackElementId(questionId),
+                    label: strings.previewcorrect || 'Correct',
+                },
+                {
+                    id: EditorHelpers.partiallyCorrectFeedbackElementId(questionId),
+                    label: strings.previewpartial || 'Partially correct',
+                },
+                {
+                    id: EditorHelpers.incorrectFeedbackElementId(questionId),
+                    label: strings.previewincorrect || 'Incorrect',
+                },
+            ];
+            feedbackFields.forEach((field) => {
+                const feedbackHtml = EditorHelpers.getEditorHtml(field.id);
+                if (EditorHelpers.stripEmptyHtml(feedbackHtml) === '') {
+                    return;
+                }
+                context.feedbackitems.push({
+                    label: field.label,
+                    text: feedbackHtml,
+                });
+            });
+            context.hasfeedback = context.feedbackitems.length > 0;
 
-                let title = fieldset.querySelector(".fheader[aria-controls^='id_question_header_'] ~ h3");
-                title.innerHTML = "Question " + visibleIndex;
+            return context;
+        },
 
-                document.querySelector('input[name="questions' + questionId + '[questionorder]"]').value = visibleIndex - 1;
+        updateQuestionSummary: async function(questionId) {
+            const block = this.getQuestionBlock(questionId);
+            if (!block) {
+                return;
+            }
+            const summaryEl = this.getQuestionSummary(questionId);
+            if (!summaryEl) {
+                return;
+            }
+            const context = this.buildQuestionSummaryContext(questionId);
+            const {html, js} = await Templates.renderForPromise(SUMMARY_TEMPLATE, context);
+            summaryEl.innerHTML = html;
+            Templates.runTemplateJS(js);
+        },
+
+        fixQuestionOrder: function() {
+            const blocks = document.querySelectorAll('.simplequiz2-question-block');
+            let visibleIndex = 1;
+
+            blocks.forEach((block) => {
+                if (this.isQuestionBlockHidden(block)) {
+                    return;
+                }
+
+                const questionId = block.dataset.questionid;
+                const title = block.querySelector('.simplequiz2-question-title');
+                if (title) {
+                    const template = this.stringCache.formquestiontitle || 'Question {$a}';
+                    title.textContent = template.replace('{$a}', String(visibleIndex));
+                }
+
+                const orderInput = document.querySelector('input[name="questions' + questionId + '[questionorder]"]');
+                if (orderInput) {
+                    orderInput.value = visibleIndex - 1;
+                }
 
                 visibleIndex++;
-            }
+            });
         },
 
-        // If there is no hidden question, disable all "add question" buttons
         checkIfCanAddQuestion: function() {
-
-            let fieldsets = document.querySelectorAll("fieldset[id^='id_question_header_']");
-            var hasHiddenQuestions = false;
-            for (const fieldset of fieldsets) {
-                if (fieldset.hidden === true) {
+            const blocks = document.querySelectorAll('.simplequiz2-question-block');
+            let hasHiddenQuestions = false;
+            blocks.forEach((block) => {
+                if (this.isQuestionBlockHidden(block)) {
                     hasHiddenQuestions = true;
-                    break;
                 }
-            }
-
-            let addButtons = document.querySelectorAll('input.add-simplequestion');
-            addButtons.forEach(function(addButton) {
-                addButton.disabled = !hasHiddenQuestions;
             });
 
+            document.querySelectorAll('.add-simplequestion').forEach(function(addButton) {
+                addButton.disabled = !hasHiddenQuestions;
+            });
         },
 
-        // Check if there is enough answers and correct answers, else display warning message and block save buttons
         checkQuestionsAnswersWarnings: function(questionIds) {
-            var formHasError = false;
+            let formHasError = false;
 
             if (questionIds == false) {
-                let visibleQuestionIds = [];
-                let fieldsets = document.querySelectorAll("fieldset[id^='id_question_header_']");
-                for (const fieldset of fieldsets) {
-                    if (fieldset.hidden === true) {
-                        continue;
+                const visibleQuestionIds = [];
+                document.querySelectorAll('.simplequiz2-question-block').forEach((block) => {
+                    if (this.isQuestionBlockHidden(block)) {
+                        return;
                     }
-                    visibleQuestionIds.push(fieldset.id.replace('id_question_header_', ''));
-                }
+                    visibleQuestionIds.push(block.dataset.questionid);
+                });
                 questionIds = visibleQuestionIds;
             }
 
-            for (const questionId of questionIds) {
+            questionIds.forEach((questionId) => {
+                const block = this.getQuestionBlock(questionId);
+                if (!block) {
+                    return;
+                }
 
-                let fieldset = document.querySelector("fieldset#id_question_header_" + questionId);
                 let questionHasError = false;
-                let isHidden = fieldset.hidden;
-
+                const isHidden = this.isQuestionBlockHidden(block);
                 const nbContent = countAnswersWithContent(questionId);
 
+                const notEnoughEl = block.querySelector('.error_not_enough_answers');
                 if (nbContent < 2) {
-                    fieldset.querySelector('.error_not_enough_answers').style.display = "inline";
+                    if (notEnoughEl) {
+                        notEnoughEl.classList.add('simplequiz2-error-visible');
+                    }
                     questionHasError = true;
-                    if (isHidden === false) {
+                    if (!isHidden) {
                         formHasError = true;
                     }
-
-                } else {
-                    fieldset.querySelector('.error_not_enough_answers').style.display = "none";
+                } else if (notEnoughEl) {
+                    notEnoughEl.classList.remove('simplequiz2-error-visible');
                 }
 
                 if (!questionHasError) {
-                    let checkboxs = document.querySelectorAll(
+                    const checkboxs = document.querySelectorAll(
                         "input[id^='id_questions" + questionId + "_correctanswers_']"
                     );
-                    let checked = hasCheckedAnswerWithContent(questionId, checkboxs);
+                    const checked = hasCheckedAnswerWithContent(questionId, checkboxs);
+                    const noRightEl = block.querySelector('.error_no_right_answer');
 
                     if (!checked) {
-                        fieldset.querySelector('.error_no_right_answer').style.display = "inline";
+                        if (noRightEl) {
+                            noRightEl.classList.add('simplequiz2-error-visible');
+                        }
                         questionHasError = true;
-
-                        if (isHidden === false) {
+                        if (!isHidden) {
                             formHasError = true;
                         }
-                    } else {
-                        fieldset.querySelector('.error_no_right_answer').style.display = "none";
+                    } else if (noRightEl) {
+                        noRightEl.classList.remove('simplequiz2-error-visible');
                     }
                 }
+            });
 
+            const submitBtn = document.getElementById('id_submitbutton');
+            if (submitBtn) {
+                submitBtn.disabled = formHasError;
             }
-
-            document.getElementById('id_submitbutton').disabled = formHasError;
-            if (document.getElementById('id_submitbutton2')) {
-                document.getElementById('id_submitbutton2').disabled = formHasError;
+            const submitBtn2 = document.getElementById('id_submitbutton2');
+            if (submitBtn2) {
+                submitBtn2.disabled = formHasError;
             }
         },
 
-        // Display red or green background on right/wrong answers
         updateQuestionsBackground: function(questionIds) {
-
-            questionIds.forEach(function(questionId) {
-                let checkboxs = document.querySelectorAll(
+            questionIds.forEach((questionId) => {
+                document.querySelectorAll(
                     "input[id^='id_questions" + questionId + "_correctanswers_']"
-                );
-                for (const checkbox of checkboxs) {
-
-                    let answerId = checkbox.dataset.answerid;
-
-                    let container = document.querySelector('#fitem_id_questions' + questionId + '_answers_' + answerId);
-                    container.classList.add('simplequiz2-answer');
+                ).forEach((checkbox) => {
+                    const answerId = checkbox.dataset.answerid;
+                    const container = document.querySelector('#fitem_id_questions' + questionId + '_answers_' + answerId);
+                    const group = container ? container.closest('.simplequiz2-answer-group') : null;
+                    const target = group || container;
+                    if (!target) {
+                        return;
+                    }
+                    target.classList.add('simplequiz2-answer');
+                    if (container) {
+                        container.classList.add('simplequiz2-answer');
+                    }
 
                     const hasContent = EditorHelpers.hasEditorContent(
                         EditorHelpers.answerElementId(questionId, answerId)
                     );
 
-                    if (!hasContent) {
-                        container.classList.remove('simplequiz2-wrong-answer');
-                        container.classList.remove('simplequiz2-right-answer');
-                    } else if (checkbox.checked === true) {
-                        container.classList.add('simplequiz2-right-answer');
-                        container.classList.remove('simplequiz2-wrong-answer');
-                    } else {
-                        container.classList.add('simplequiz2-wrong-answer');
-                        container.classList.remove('simplequiz2-right-answer');
+                    const targets = [target];
+                    if (container && container !== target) {
+                        targets.push(container);
                     }
-
-                }
+                    targets.forEach((el) => {
+                        if (!hasContent) {
+                            el.classList.remove('simplequiz2-wrong-answer');
+                            el.classList.remove('simplequiz2-right-answer');
+                        } else if (checkbox.checked === true) {
+                            el.classList.add('simplequiz2-right-answer');
+                            el.classList.remove('simplequiz2-wrong-answer');
+                        } else {
+                            el.classList.add('simplequiz2-wrong-answer');
+                            el.classList.remove('simplequiz2-right-answer');
+                        }
+                    });
+                });
             });
         },
 

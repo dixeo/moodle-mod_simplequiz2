@@ -4,47 +4,7 @@
 // @copyright  2026 Dixeo (contact@dixeo.com)
 // @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
 
-define(['core/str'], function(str) {
-
-    /**
-     * Whether an answer object is marked correct.
-     *
-     * @param {Object|null} answer
-     * @return {boolean}
-     */
-    const isAnswerCorrect = function(answer) {
-        return !!(answer && answer.iscorrect == 1);
-    };
-
-    /**
-     * Find whether selected answers match correct indices for a question.
-     *
-     * @param {Object} question Question with answers[].iscorrect
-     * @param {number[]} selectedIds Storage answer indices selected by user.
-     * @return {{iscorrect: boolean, haspartial: boolean}}
-     */
-    const evaluateQuestion = function(question, selectedIds) {
-        let hascorrect = false;
-        let haswrong = false;
-
-        question.answers.forEach(function(answer, index) {
-            const selected = selectedIds.indexOf(index) !== -1;
-            const correct = isAnswerCorrect(answer);
-            if (selected && correct) {
-                hascorrect = true;
-            }
-            if (selected && !correct) {
-                haswrong = true;
-            }
-            if (!selected && correct) {
-                haswrong = true;
-            }
-        });
-
-        const iscorrect = hascorrect && !haswrong;
-        const haspartial = hascorrect && haswrong;
-        return {iscorrect: iscorrect, haspartial: haspartial};
-    };
+define(['core/str', 'core/ajax'], function(str, ajax) {
 
     /**
      * Strip HTML to plain text for tutor context payloads.
@@ -59,11 +19,67 @@ define(['core/str'], function(str) {
     };
 
     /**
+     * Apply status and feedback below the status line after a server check.
+     *
+     * @param {HTMLElement} statusEl
+     * @param {HTMLElement|null} feedbackEl
+     * @param {Object} data Server check response.
+     * @param {Object} strings Localized status strings.
+     */
+    const applyStatusAndFeedback = function(statusEl, feedbackEl, data, strings) {
+        const statusModifierClasses = ['question-status-success', 'question-status-partial', 'question-status-fail'];
+        statusEl.classList.remove(...statusModifierClasses);
+
+        let statusText = '';
+        if (data.iscorrect === true) {
+            statusText = strings.questionsuccess || '';
+            statusEl.classList.add('question-status-success');
+        } else if (data.haspartial === true) {
+            statusText = strings.questionpartial || '';
+            statusEl.classList.add('question-status-partial');
+        } else {
+            statusText = strings.questionfail || '';
+            statusEl.classList.add('question-status-fail');
+        }
+        statusEl.textContent = statusText;
+
+        const customFeedback = (data.feedback || '').trim();
+        if (feedbackEl) {
+            if (customFeedback !== '') {
+                feedbackEl.innerHTML = customFeedback;
+                feedbackEl.hidden = false;
+            } else {
+                feedbackEl.innerHTML = '';
+                feedbackEl.hidden = true;
+            }
+        }
+    };
+
+    /**
+     * Parse results map from embed check webservice.
+     *
+     * @param {string|Object} results
+     * @return {Object}
+     */
+    const parseResults = function(results) {
+        if (typeof results === 'string') {
+            try {
+                return JSON.parse(results || '{}');
+            } catch (e) {
+                return {};
+            }
+        }
+        return results || {};
+    };
+
+    /**
      * Initialise embed practice player inside a container.
      *
      * @param {HTMLElement} root Container holding rendered player HTML.
      * @param {Object} config
-     * @param {Array} config.questions Full question data including iscorrect.
+     * @param {number} config.courseid Course ID for embed check webservice.
+     * @param {string} config.questionsJson Full question JSON (server-side grading only).
+     * @param {number} config.questionCount Number of questions.
      * @param {Function} [config.onAnswer]
      * @param {Function} [config.onFinish] Called with {score, total} when Finish is clicked.
      * @param {Function} [config.onRestart] Called with {score, total}|null when Restart is clicked.
@@ -72,7 +88,11 @@ define(['core/str'], function(str) {
      * @return {{destroy: Function}}
      */
     const init = function(root, config) {
-        const questions = config.questions || [];
+        const courseid = config.courseid;
+        const questionsJson = config.questionsJson || '[]';
+        const questionCount = typeof config.questionCount === 'number'
+            ? config.questionCount
+            : (JSON.parse(questionsJson || '[]')).length;
         const onAnswer = typeof config.onAnswer === 'function' ? config.onAnswer : function() {};
         const onFinish = typeof config.onFinish === 'function' ? config.onFinish : function() {};
         const onRestart = typeof config.onRestart === 'function' ? config.onRestart : function() {};
@@ -95,6 +115,26 @@ define(['core/str'], function(str) {
             });
         });
 
+        /**
+         * Grade one question via webservice (correct answers never sent to the client beforehand).
+         *
+         * @param {number} questionId
+         * @param {number[]} selectedIds
+         * @return {Promise<Object>}
+         */
+        const checkQuestion = function(questionId, selectedIds) {
+            const request = {
+                methodname: 'mod_simplequiz2_check_embed_question',
+                args: {
+                    courseid: courseid,
+                    questions: questionsJson,
+                    questionid: questionId,
+                    answers: selectedIds.join(','),
+                },
+            };
+            return ajax.call([request])[0];
+        };
+
         const emitStateChange = function() {
             onStateChange({
                 answerResults: answerResults.slice(),
@@ -104,41 +144,35 @@ define(['core/str'], function(str) {
                 currentQuestionIndex: currentQuestionIndex,
                 showingResults: showingResults,
                 score: lastResult ? lastResult.score : null,
-                total: questions.length,
+                total: questionCount,
             });
         };
 
         /**
-         * Paint a previously submitted answer onto the DOM.
+         * Paint a previously submitted answer onto the DOM from a server check response.
          *
          * @param {number} questionId
          * @param {number[]} selectedIds
-         * @param {boolean} iscorrect
-         * @param {boolean} haspartial
+         * @param {Object} data Server check response.
          */
-        const paintAnsweredQuestion = function(questionId, selectedIds, iscorrect, haspartial) {
-            const question = questions[questionId];
-            if (!question) {
-                return;
-            }
-
+        const paintAnsweredQuestion = function(questionId, selectedIds, data) {
             const container = root.querySelector('.question-container[data-questionid="' + questionId + '"]');
             if (!container) {
                 return;
             }
+
+            const results = parseResults(data.results);
 
             container.querySelectorAll('.answer-container').forEach(function(el) {
                 const answerId = parseInt(el.dataset.answerid, 10);
                 el.disabled = true;
                 el.classList.remove('selected', 'question-success', 'question-fail');
                 if (selectedIds.indexOf(answerId) !== -1) {
-                    if (isAnswerCorrect(question.answers[answerId])) {
+                    if (results[answerId] === true) {
                         el.classList.add('question-success');
                     } else {
                         el.classList.add('question-fail');
                     }
-                } else if (isAnswerCorrect(question.answers[answerId])) {
-                    el.classList.add('question-success');
                 }
             });
 
@@ -151,19 +185,10 @@ define(['core/str'], function(str) {
                 nextBtn.style.display = 'none';
             }
 
+            const feedbackEl = container.querySelector('.question-feedback[data-questionid="' + questionId + '"]');
             const statusEl = container.querySelector('.question-status[data-questionid="' + questionId + '"]');
             if (statusEl) {
-                statusEl.classList.remove('question-status-success', 'question-status-partial', 'question-status-fail');
-                if (iscorrect) {
-                    statusEl.textContent = strings.questionsuccess || '';
-                    statusEl.classList.add('question-status-success');
-                } else if (haspartial) {
-                    statusEl.textContent = strings.questionpartial || '';
-                    statusEl.classList.add('question-status-partial');
-                } else {
-                    statusEl.textContent = strings.questionfail || '';
-                    statusEl.classList.add('question-status-fail');
-                }
+                applyStatusAndFeedback(statusEl, feedbackEl, data, strings);
             }
         };
 
@@ -212,6 +237,11 @@ define(['core/str'], function(str) {
                 const nextBtn = q.querySelector('.next-question');
                 if (nextBtn) {
                     nextBtn.style.display = 'none';
+                }
+                const feedbackEl = q.querySelector('.question-feedback');
+                if (feedbackEl) {
+                    feedbackEl.innerHTML = '';
+                    feedbackEl.hidden = true;
                 }
                 const statusEl = q.querySelector('.question-status');
                 if (statusEl) {
@@ -302,13 +332,8 @@ define(['core/str'], function(str) {
 
         root.querySelectorAll('.question-container button.check-answer').forEach(function(checkBtn) {
             checkBtn.addEventListener('click', function() {
-                loadStrings.then(function() {
+                loadStrings.then(async function() {
                     const questionId = parseInt(checkBtn.dataset.questionid, 10);
-                    const question = questions[questionId];
-                    if (!question) {
-                        return;
-                    }
-
                     const selector = '.question-container[data-questionid="' + questionId + '"] .answer-container.selected';
                     const selectedEls = root.querySelectorAll(selector);
                     const selectedIds = [];
@@ -316,33 +341,30 @@ define(['core/str'], function(str) {
                         selectedIds.push(parseInt(el.dataset.answerid, 10));
                     });
 
-                    const evaluation = evaluateQuestion(question, selectedIds);
+                    const data = await checkQuestion(questionId, selectedIds);
 
                     selectedByQuestion[questionId] = selectedIds.slice();
-                    paintAnsweredQuestion(questionId, selectedIds, evaluation.iscorrect, evaluation.haspartial);
+                    paintAnsweredQuestion(questionId, selectedIds, data);
 
+                    const container = root.querySelector('.question-container[data-questionid="' + questionId + '"]');
                     let chosenText = '';
-                    let correctText = '';
-                    selectedIds.forEach(function(id) {
-                        if (question.answers[id]) {
-                            chosenText = plainText(question.answers[id].text);
+                    if (container && selectedIds.length) {
+                        const chosenEl = container.querySelector('.answer-container[data-answerid="' + selectedIds[0] + '"]');
+                        if (chosenEl) {
+                            chosenText = plainText(chosenEl.querySelector('.answer-text')?.innerHTML || chosenEl.innerHTML);
                         }
-                    });
-                    question.answers.forEach(function(ans) {
-                        if (isAnswerCorrect(ans)) {
-                            correctText = plainText(ans.text);
-                        }
-                    });
+                    }
+                    const questionTextEl = container ? container.querySelector('.question-text') : null;
 
                     onAnswer({
                         questionIndex: questionId,
-                        questionText: plainText(question.text),
+                        questionText: questionTextEl ? plainText(questionTextEl.innerHTML) : '',
                         chosenText: chosenText,
-                        correctText: correctText,
-                        isCorrect: evaluation.iscorrect,
+                        correctText: data.correctanswer || '',
+                        isCorrect: data.iscorrect === true,
                     });
 
-                    answerResults[questionId] = evaluation.iscorrect;
+                    answerResults[questionId] = data.iscorrect === true;
 
                     const nextquestion = root.querySelector(
                         '.question-container[data-questionid="' + (questionId + 1) + '"]'
@@ -403,7 +425,7 @@ define(['core/str'], function(str) {
                     resultContainer.style.display = 'flex';
                     const currentScore = resultContainer.querySelector('.current-score');
                     if (currentScore) {
-                        currentScore.textContent = score + ' / ' + questions.length;
+                        currentScore.textContent = score + ' / ' + questionCount;
                     }
                 }
                 if (finishBtn) {
@@ -413,27 +435,28 @@ define(['core/str'], function(str) {
                 showingResults = true;
                 lastResult = {
                     score: score,
-                    total: questions.length,
+                    total: questionCount,
                 };
                 emitStateChange();
             });
         }
 
         if (initialState) {
-            loadStrings.then(function() {
+            loadStrings.then(async function() {
                 const savedResults = initialState.answerResults || [];
                 const savedSelections = initialState.selectedAnswerIds || [];
 
-                savedResults.forEach(function(correct, questionId) {
+                for (let questionId = 0; questionId < savedResults.length; questionId++) {
+                    const correct = savedResults[questionId];
                     if (typeof correct !== 'boolean') {
-                        return;
+                        continue;
                     }
-                    answerResults[questionId] = correct;
                     const selectedIds = savedSelections[questionId] || [];
                     selectedByQuestion[questionId] = selectedIds.slice();
-                    const evaluation = evaluateQuestion(questions[questionId], selectedIds);
-                    paintAnsweredQuestion(questionId, selectedIds, correct, evaluation.haspartial);
-                });
+                    answerResults[questionId] = correct;
+                    const data = await checkQuestion(questionId, selectedIds);
+                    paintAnsweredQuestion(questionId, selectedIds, data);
+                }
 
                 currentQuestionIndex = typeof initialState.currentQuestionIndex === 'number'
                     ? initialState.currentQuestionIndex
@@ -446,7 +469,7 @@ define(['core/str'], function(str) {
 
                 if (typeof savedResults[currentQuestionIndex] !== 'boolean') {
                     paintPendingSelections(currentQuestionIndex, savedSelections[currentQuestionIndex] || []);
-                } else if (questions[currentQuestionIndex + 1]) {
+                } else if (currentQuestionIndex + 1 < questionCount) {
                     const nextBtn = root.querySelector(
                         'button.next-question[data-questionid="' + currentQuestionIndex + '"]'
                     );
@@ -466,17 +489,17 @@ define(['core/str'], function(str) {
                         resultContainer.style.display = 'flex';
                         const currentScore = resultContainer.querySelector('.current-score');
                         if (currentScore) {
-                            currentScore.textContent = score + ' / ' + questions.length;
+                            currentScore.textContent = score + ' / ' + questionCount;
                         }
                     }
                     if (finishBtn) {
                         finishBtn.style.display = 'inline-block';
                     }
                     showingResults = true;
-                    lastResult = {score: score, total: questions.length};
+                    lastResult = {score: score, total: questionCount};
                 } else {
-                    const allAnswered = questions.length > 0 &&
-                        savedResults.length >= questions.length &&
+                    const allAnswered = questionCount > 0 &&
+                        savedResults.length >= questionCount &&
                         savedResults.every(function(v) { return typeof v === 'boolean'; });
                     const showBtn = root.querySelector('#simplequiz_container button.show-results');
                     if (allAnswered && showBtn) {
