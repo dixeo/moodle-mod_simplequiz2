@@ -598,7 +598,33 @@ function simplequiz2_normalize_question(object $question): object {
 }
 
 /**
- * Rewrite pluginfile URLs and format one HTML field for display.
+ * Clean author-controlled HTML for display.
+ *
+ * Question, answer, and feedback HTML is not trusted. format_text() removes
+ * script and executable event-handler markup and keeps ordinary formatting.
+ * Callers that store files must rewrite @@PLUGINFILE@@ URLs before this runs.
+ *
+ * @param string $html HTML to display.
+ * @param \context|null $context Filter context. Cleaning still runs when omitted.
+ * @return string
+ */
+function simplequiz2_clean_author_html(string $html, ?\context $context = null): string {
+    $options = [
+        'para' => false,
+        'filter' => true,
+    ];
+    if ($context !== null) {
+        $options['context'] = $context;
+    }
+
+    return trim(format_text($html, FORMAT_HTML, $options));
+}
+
+/**
+ * Rewrite pluginfile URLs, then clean one stored HTML field for display.
+ *
+ * URL rewriting and cleaning are separate steps. Rewriting runs first because
+ * format_text() expects @@PLUGINFILE@@ tokens to already be real URLs.
  *
  * @param string $html Stored HTML with @@PLUGINFILE@@ refs.
  * @param \context $context Module context.
@@ -609,24 +635,58 @@ function simplequiz2_format_stored_html(string $html, \context $context, int $it
     global $CFG;
     require_once("{$CFG->libdir}/filelib.php");
 
-    $options = [
-        'noclean' => true,
-        'para'    => false,
-        'filter'  => true,
-        'context' => $context,
-    ];
-
     $rewritten = file_rewrite_pluginfile_urls(
         $html,
         'pluginfile.php',
         $context->id,
         'mod_simplequiz2',
         'data',
-        $itemid,
-        $options
+        $itemid
     );
 
-    return trim(format_text($rewritten, FORMAT_HTML, $options, null));
+    return simplequiz2_clean_author_html($rewritten, $context);
+}
+
+/**
+ * Clean question, answer, and feedback HTML that has no activity file area.
+ *
+ * Used for embed payloads. Stored activities use simplequiz2_format_stored_html()
+ * so plugin-file links are rewritten before cleaning.
+ *
+ * @param array $questions Question list from decoded JSON.
+ * @param \context $context Context used for filters.
+ * @return array
+ */
+function simplequiz2_clean_questions_html(array $questions, \context $context): array {
+    foreach ($questions as $order => $questiondata) {
+        if (is_array($questiondata)) {
+            $questiondata = (object) $questiondata;
+        }
+        $questiondata = simplequiz2_normalize_question($questiondata);
+        $questiondata->text = simplequiz2_clean_author_html((string) ($questiondata->text ?? ''), $context);
+        if (!isset($questiondata->answers) || !is_array($questiondata->answers)) {
+            $questiondata->answers = [];
+        }
+
+        foreach ($questiondata->answers as $answerorder => $answerdata) {
+            if (is_array($answerdata)) {
+                $answerdata = (object) $answerdata;
+            }
+            $answerdata->text = simplequiz2_clean_author_html((string) ($answerdata->text ?? ''), $context);
+            $questiondata->answers[$answerorder] = $answerdata;
+        }
+
+        $questiondata->correctfeedback = simplequiz2_clean_author_html($questiondata->correctfeedback, $context);
+        $questiondata->partiallycorrectfeedback = simplequiz2_clean_author_html(
+            $questiondata->partiallycorrectfeedback,
+            $context
+        );
+        $questiondata->incorrectfeedback = simplequiz2_clean_author_html($questiondata->incorrectfeedback, $context);
+
+        $questions[$order] = $questiondata;
+    }
+
+    return $questions;
 }
 
 /**
@@ -784,13 +844,6 @@ function simplequiz2_rewrite_pluginfile_urls($questions, int $cmid) {
     require_once("$CFG->libdir/filelib.php");
 
     $context = \context_module::instance($cmid);
-
-    $options   = [
-        'noclean' => true,
-        'para'    => false,
-        'filter'  => true,
-        'context' => $context,
-    ];
     $questions = (array) $questions;
 
     // Rename all @@PLUGINFILE@@ link with pluginfile.php.

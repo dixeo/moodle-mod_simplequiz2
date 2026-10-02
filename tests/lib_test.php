@@ -284,4 +284,161 @@ final class lib_test extends \advanced_testcase {
         $defaults = simplequiz2_reset_course_form_defaults($course);
         $this->assertEquals(1, $defaults['reset_simplequiz2_attempts']);
     }
+
+    /**
+     * Author HTML keeps formatting and drops script and event handlers.
+     *
+     * @covers ::simplequiz2_clean_author_html
+     */
+    public function test_clean_author_html_strips_script_and_handlers(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $context = \context_course::instance($course->id);
+        $payload = '<p>Safe <strong>text</strong></p>'
+            . '<script>document.body.setAttribute("data-simplequiz2-xss","executed")</script>'
+            . '<img src="https://example.com/a.png" onerror="document.body.setAttribute(\'data-simplequiz2-xss\',\'executed\')"'
+            . ' alt="pic">';
+
+        $cleaned = simplequiz2_clean_author_html($payload, $context);
+
+        $this->assertStringContainsString('Safe', $cleaned);
+        $this->assertStringContainsString('<strong>text</strong>', $cleaned);
+        $this->assertStringContainsString('https://example.com/a.png', $cleaned);
+        $this->assertStringNotContainsString('<script', strtolower($cleaned));
+        $this->assertStringNotContainsString('onerror', strtolower($cleaned));
+        $this->assertStringNotContainsString('data-simplequiz2-xss', $cleaned);
+    }
+
+    /**
+     * Stored fields are rewritten to pluginfile URLs and then cleaned.
+     *
+     * @covers ::simplequiz2_format_stored_html
+     * @covers ::simplequiz2_rewrite_pluginfile_urls
+     * @covers ::simplequiz2_get_feedback_for_outcome
+     */
+    public function test_stored_html_rewrites_pluginfile_and_strips_script(): void {
+        $this->setAdminUser();
+        $course = $this->getDataGenerator()->create_course();
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_simplequiz2');
+        $quiz = $generator->create_instance(['course' => $course->id]);
+        $cm = get_coursemodule_from_instance('simplequiz2', $quiz->id, $course->id, false, MUST_EXIST);
+        $context = \context_module::instance($cm->id);
+
+        $formatted = simplequiz2_format_stored_html(
+            '<p>Look</p><img src="@@PLUGINFILE@@/pic.png" alt="pic"><script>bad()</script>',
+            $context,
+            1
+        );
+        $this->assertStringContainsString('pluginfile.php', $formatted);
+        $this->assertStringContainsString('pic.png', $formatted);
+        $this->assertStringNotContainsString('@@PLUGINFILE@@', $formatted);
+        $this->assertStringNotContainsString('<script', strtolower($formatted));
+        $this->assertStringContainsString('<p>Look</p>', $formatted);
+
+        $questions = simplequiz2_rewrite_pluginfile_urls([
+            (object) [
+                'text' => '<p>Question</p><script>bad()</script>',
+                'answers' => [
+                    (object) [
+                        'text' => '<p onclick="bad()">Answer</p><img src="@@PLUGINFILE@@/ans.png" alt="ans">',
+                        'iscorrect' => 1,
+                    ],
+                ],
+                'correctfeedback' => '<p>Yes</p><script>bad()</script>',
+                'partiallycorrectfeedback' => '<p onmouseover="bad()">Partly</p>',
+                'incorrectfeedback' => '<img src="x" onerror="bad()">No',
+            ],
+        ], $cm->id);
+
+        $question = $questions[0];
+        $this->assertStringContainsString('Question', $question->text);
+        $this->assertStringNotContainsString('<script', strtolower($question->text));
+        $this->assertStringContainsString('Answer', $question->answers[0]->text);
+        $this->assertStringContainsString('pluginfile.php', $question->answers[0]->text);
+        $this->assertStringNotContainsString('onclick', strtolower($question->answers[0]->text));
+        $this->assertStringContainsString('Yes', $question->correctfeedback);
+        $this->assertStringNotContainsString('<script', strtolower($question->correctfeedback));
+        $this->assertStringContainsString('Partly', $question->partiallycorrectfeedback);
+        $this->assertStringNotContainsString('onmouseover', strtolower($question->partiallycorrectfeedback));
+        $this->assertStringContainsString('No', $question->incorrectfeedback);
+        $this->assertStringNotContainsString('onerror', strtolower($question->incorrectfeedback));
+
+        $feedback = simplequiz2_get_feedback_for_outcome($question, 0, $cm->id, SIMPLE_QUIZ2_FEEDBACK_CORRECT);
+        $this->assertStringContainsString('Yes', $feedback);
+        $this->assertStringNotContainsString('<script', strtolower($feedback));
+    }
+
+    /**
+     * Embed question trees are cleaned without treating them as activity files.
+     *
+     * @covers ::simplequiz2_clean_questions_html
+     */
+    public function test_clean_questions_html_strips_script(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $context = \context_course::instance($course->id);
+        $cleaned = simplequiz2_clean_questions_html([
+            (object) [
+                'text' => '<p>Embed</p><script>bad()</script>',
+                'answers' => [
+                    (object) ['text' => '<a href="javascript:bad()">Choice</a>', 'iscorrect' => 1],
+                ],
+                'correctfeedback' => '<p>Ok</p><script>bad()</script>',
+                'partiallycorrectfeedback' => '<p>Mid</p>',
+                'incorrectfeedback' => '<p onclick="bad()">No</p>',
+            ],
+        ], $context);
+
+        $question = $cleaned[0];
+        $this->assertStringContainsString('Embed', $question->text);
+        $this->assertStringNotContainsString('<script', strtolower($question->text));
+        $this->assertStringContainsString('Choice', $question->answers[0]->text);
+        $this->assertStringNotContainsString('javascript:', strtolower($question->answers[0]->text));
+        $this->assertStringContainsString('Ok', $question->correctfeedback);
+        $this->assertStringNotContainsString('<script', strtolower($question->correctfeedback));
+        $this->assertStringContainsString('Mid', $question->partiallycorrectfeedback);
+        $this->assertStringContainsString('No', $question->incorrectfeedback);
+        $this->assertStringNotContainsString('onclick', strtolower($question->incorrectfeedback));
+    }
+
+    /**
+     * Edit-form summary HTML is cleaned, including when no module context is available.
+     *
+     * @covers \mod_simplequiz2\util\question_summary_context::from_stored_question
+     */
+    public function test_question_summary_strips_script(): void {
+        $summary = \mod_simplequiz2\util\question_summary_context::from_stored_question((object) [
+            'text' => '<p>Q</p><script>bad()</script>',
+            'answers' => [
+                (object) ['text' => '<p onclick="bad()">A</p>', 'iscorrect' => 1],
+            ],
+            'correctfeedback' => '<p>Yes</p><script>bad()</script>',
+            'partiallycorrectfeedback' => '<p onmouseover="bad()">Partly</p>',
+            'incorrectfeedback' => '<img src="x" onerror="bad()">No',
+        ]);
+
+        $this->assertStringContainsString('Q', $summary['questiontext']);
+        $this->assertStringNotContainsString('<script', strtolower($summary['questiontext']));
+        $this->assertStringContainsString('A', $summary['answers'][0]['text']);
+        $this->assertStringNotContainsString('onclick', strtolower($summary['answers'][0]['text']));
+        $feedback = array_column($summary['feedbackitems'], 'text');
+        $joined = strtolower(implode(' ', $feedback));
+        $this->assertStringNotContainsString('<script', $joined);
+        $this->assertStringNotContainsString('onmouseover', $joined);
+        $this->assertStringNotContainsString('onerror', $joined);
+        $this->assertStringContainsString('Yes', $feedback[0]);
+    }
+
+    /**
+     * A learner who can view the activity cannot author it.
+     */
+    public function test_student_with_view_cannot_add_instance(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_simplequiz2');
+        $quiz = $generator->create_instance(['course' => $course->id]);
+        $cm = get_coursemodule_from_instance('simplequiz2', $quiz->id, $course->id, false, MUST_EXIST);
+
+        $this->setUser($student);
+        $this->assertTrue(has_capability('mod/simplequiz2:view', \context_module::instance($cm->id)));
+        $this->assertFalse(has_capability('mod/simplequiz2:addinstance', \context_course::instance($course->id)));
+    }
 }

@@ -188,7 +188,8 @@ class mod_simplequiz2_mod_form extends moodleform_mod {
                     $i + 1,
                     $hascontent,
                     $questionrow,
-                    $OUTPUT
+                    $OUTPUT,
+                    $this->context
                 )
             ));
 
