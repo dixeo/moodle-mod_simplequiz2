@@ -428,7 +428,27 @@ final class lib_test extends \advanced_testcase {
     }
 
     /**
+     * Deferred editors keep the site element list and drop script.
+     *
+     * @covers ::simplequiz2_editor_extended_valid_elements
+     * @covers ::simplequiz2_strip_script_extended_elements
+     */
+    public function test_editor_extended_valid_elements_drops_script(): void {
+        $this->assertSame('p[*],i[*]', simplequiz2_editor_extended_valid_elements(null));
+        $this->assertSame('p[*],i[*]', simplequiz2_editor_extended_valid_elements('script[*],p[*],i[*]'));
+        $this->assertSame(
+            'span[style],i[*]',
+            simplequiz2_editor_extended_valid_elements('span[style],script[src|type],i[*]')
+        );
+        $this->assertSame('noscript[*],p[*]', simplequiz2_editor_extended_valid_elements('noscript[*],p[*]'));
+        $this->assertSame('', simplequiz2_editor_extended_valid_elements('script[*]'));
+        $this->assertSame('', simplequiz2_editor_extended_valid_elements(''));
+    }
+
+    /**
      * A learner who can view the activity cannot author it.
+     *
+     * @coversNothing
      */
     public function test_student_with_view_cannot_add_instance(): void {
         $course = $this->getDataGenerator()->create_course();

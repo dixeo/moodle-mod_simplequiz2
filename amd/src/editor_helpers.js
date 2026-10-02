@@ -161,6 +161,39 @@ define([
     };
 
     /**
+     * Remove script elements from a TinyMCE extended_valid_elements list.
+     *
+     * @param {string} elements
+     * @return {string}
+     */
+    const stripScriptExtendedElements = (elements) => {
+        const parts = [];
+        let depth = 0;
+        let current = '';
+        const source = elements || '';
+        for (let i = 0; i < source.length; i++) {
+            const char = source.charAt(i);
+            if (char === '[') {
+                depth++;
+                current += char;
+            } else if (char === ']') {
+                depth = Math.max(0, depth - 1);
+                current += char;
+            } else if (char === ',' && depth === 0) {
+                parts.push(current);
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        parts.push(current);
+        return parts
+            .map((part) => part.trim())
+            .filter((part) => part !== '' && !/^script(\[.*\])?$/i.test(part))
+            .join(',');
+    };
+
+    /**
      * Build full setup options for TinyMCE (partial options break plugin loading).
      *
      * @param {HTMLTextAreaElement} textarea
@@ -184,7 +217,9 @@ define([
             plugins: tinyBaseOptions.plugins,
             branding: tinyBaseOptions.branding !== undefined ? tinyBaseOptions.branding : true,
         };
-        setupOptions[extendedElementsKey] = tinyBaseOptions[extendedElementsKey] || 'script[*],p[*],i[*]';
+        const configured = tinyBaseOptions[extendedElementsKey];
+        const elements = configured === undefined || configured === null ? 'p[*],i[*]' : String(configured);
+        setupOptions[extendedElementsKey] = stripScriptExtendedElements(elements);
         return setupOptions;
     };
 

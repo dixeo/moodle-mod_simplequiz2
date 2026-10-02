@@ -598,6 +598,66 @@ function simplequiz2_normalize_question(object $question): object {
 }
 
 /**
+ * TinyMCE extended_valid_elements for deferred question editors.
+ *
+ * Keeps the site list, including Moodle's default when the setting is unset,
+ * and removes script elements. Question HTML is shown to other users.
+ *
+ * @param string|null $configured editor_tiny/extended_valid_elements, or null when unset.
+ * @return string
+ */
+function simplequiz2_editor_extended_valid_elements(?string $configured): string {
+    if ($configured === null) {
+        $configured = 'script[*],p[*],i[*]';
+    }
+
+    return simplequiz2_strip_script_extended_elements($configured);
+}
+
+/**
+ * Remove script elements from a TinyMCE extended_valid_elements list.
+ *
+ * Element names are matched only outside attribute brackets, so a name such as
+ * noscript is kept.
+ *
+ * @param string $elements Comma-separated TinyMCE element list.
+ * @return string
+ */
+function simplequiz2_strip_script_extended_elements(string $elements): string {
+    $parts = [];
+    $depth = 0;
+    $current = '';
+    $length = strlen($elements);
+    for ($i = 0; $i < $length; $i++) {
+        $char = $elements[$i];
+        if ($char === '[') {
+            $depth++;
+            $current .= $char;
+        } else if ($char === ']') {
+            $depth = max(0, $depth - 1);
+            $current .= $char;
+        } else if ($char === ',' && $depth === 0) {
+            $parts[] = $current;
+            $current = '';
+        } else {
+            $current .= $char;
+        }
+    }
+    $parts[] = $current;
+
+    $kept = [];
+    foreach ($parts as $part) {
+        $part = trim($part);
+        if ($part === '' || preg_match('/^script(\[.*\])?$/i', $part)) {
+            continue;
+        }
+        $kept[] = $part;
+    }
+
+    return implode(',', $kept);
+}
+
+/**
  * Clean author-controlled HTML for display.
  *
  * Question, answer, and feedback HTML is not trusted. format_text() removes
