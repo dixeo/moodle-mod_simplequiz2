@@ -30,6 +30,11 @@ use core_external\external_single_structure;
 use core_external\external_value;
 use mod_simplequiz2\player_service;
 
+defined('MOODLE_INTERNAL') || die();
+
+global $CFG;
+require_once($CFG->dirroot . '/mod/simplequiz2/lib.php');
+
 /**
  * Render embed player markup for tutor practice quizzes.
  */
@@ -78,6 +83,7 @@ class render_embed extends external_api {
         foreach ($decoded as $item) {
             $questionsdata[] = is_object($item) ? $item : (object) $item;
         }
+        $questionsdata = simplequiz2_clean_questions_html($questionsdata, $context);
 
         $html = player_service::render_player($questionsdata, [
             'embed' => true,

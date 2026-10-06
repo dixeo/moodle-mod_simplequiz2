@@ -129,7 +129,9 @@ class mod_simplequiz2_mod_form extends moodleform_mod {
             'context' => $context->id,
             'plugins' => $manager->get_plugin_configuration($context, [], [], $pref),
             'branding' => property_exists($siteconfig, 'branding') ? !empty($siteconfig->branding) : true,
-            'extended_valid_elements' => $siteconfig->extended_valid_elements ?? 'script[*],p[*],i[*]',
+            'extended_valid_elements' => simplequiz2_editor_extended_valid_elements(
+                isset($siteconfig->extended_valid_elements) ? (string) $siteconfig->extended_valid_elements : null
+            ),
         ];
 
         $configoptions = json_encode(convert_to_array($config));
@@ -188,7 +190,8 @@ class mod_simplequiz2_mod_form extends moodleform_mod {
                     $i + 1,
                     $hascontent,
                     $questionrow,
-                    $OUTPUT
+                    $OUTPUT,
+                    $this->context
                 )
             ));
 

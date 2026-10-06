@@ -16,6 +16,11 @@
 
 namespace mod_simplequiz2\util;
 
+defined('MOODLE_INTERNAL') || die();
+
+global $CFG;
+require_once($CFG->dirroot . '/mod/simplequiz2/lib.php');
+
 /**
  * Build Mustache context for mod_simplequiz2/question_summary.
  *
@@ -62,35 +67,50 @@ class question_summary_context {
     /**
      * Context for a stored question row from JSON.
      *
+     * When a module context and question index are provided, plugin-file URLs are
+     * rewritten before cleaning. Otherwise the HTML is cleaned without file rewriting.
+     *
      * @param object|null $questiondata Question object from simplequiz JSON.
+     * @param \context|null $modulecontext Module context for filters and plugin files.
+     * @param int|null $questionindex Zero-based question index, used for file item ids.
      * @return array Mustache context.
      */
-    public static function from_stored_question(?object $questiondata): array {
+    public static function from_stored_question(
+        ?object $questiondata,
+        ?\context $modulecontext = null,
+        ?int $questionindex = null
+    ): array {
         $context = self::empty_context();
 
         if ($questiondata === null) {
             return $context;
         }
 
+        $questionitemid = $questionindex === null ? null : $questionindex + 1;
+
         if (!editor_content::is_empty($questiondata->text ?? '')) {
             $context['hasquestion'] = true;
-            $context['questiontext'] = format_text(
-                $questiondata->text,
-                FORMAT_HTML,
-                ['noclean' => true, 'para' => false]
+            $context['questiontext'] = self::format_author_html(
+                (string) $questiondata->text,
+                $modulecontext,
+                $questionitemid
             );
         }
 
         if (!empty($questiondata->answers) && is_array($questiondata->answers)) {
-            foreach ($questiondata->answers as $answer) {
+            foreach ($questiondata->answers as $answerorder => $answer) {
                 if (is_array($answer)) {
                     $answer = (object) $answer;
                 }
                 if (editor_content::is_empty($answer->text ?? '')) {
                     continue;
                 }
+                $answeritemid = null;
+                if ($questionitemid !== null) {
+                    $answeritemid = (int) ($questionitemid . ((int) $answerorder + 1));
+                }
                 $context['answers'][] = [
-                    'text' => format_text($answer->text, FORMAT_HTML, ['noclean' => true, 'para' => false]),
+                    'text' => self::format_author_html((string) $answer->text, $modulecontext, $answeritemid),
                     'iscorrect' => !empty($answer->iscorrect),
                 ];
             }
@@ -107,14 +127,40 @@ class question_summary_context {
             if (editor_content::is_empty($value)) {
                 continue;
             }
+            $itemid = null;
+            if ($questionitemid !== null) {
+                if ($field === 'correctfeedback') {
+                    $itemid = simplequiz2_correct_feedback_itemid($questionitemid);
+                } else if ($field === 'partiallycorrectfeedback') {
+                    $itemid = simplequiz2_partiallycorrect_feedback_itemid($questionitemid);
+                } else {
+                    $itemid = simplequiz2_incorrect_feedback_itemid($questionitemid);
+                }
+            }
             $context['feedbackitems'][] = [
                 'label' => $label,
-                'text' => format_text($value, FORMAT_HTML, ['noclean' => true, 'para' => false]),
+                'text' => self::format_author_html((string) $value, $modulecontext, $itemid),
             ];
         }
         $context['hasfeedback'] = !empty($context['feedbackitems']);
 
         return $context;
+    }
+
+    /**
+     * Clean one author HTML field, rewriting plugin files when an item id is known.
+     *
+     * @param string $html Stored HTML.
+     * @param \context|null $modulecontext Module context.
+     * @param int|null $itemid File area item id.
+     * @return string
+     */
+    private static function format_author_html(string $html, ?\context $modulecontext, ?int $itemid): string {
+        if ($modulecontext !== null && $itemid !== null) {
+            return simplequiz2_format_stored_html($html, $modulecontext, $itemid);
+        }
+
+        return simplequiz2_clean_author_html($html, $modulecontext);
     }
 
     /**

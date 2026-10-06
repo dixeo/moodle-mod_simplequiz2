@@ -91,12 +91,7 @@ class check_embed_question extends external_api {
         $rawfeedback = simplequiz2_get_raw_feedback_for_outcome($question, $outcome);
         $feedback = '';
         if (!\mod_simplequiz2\util\editor_content::is_empty($rawfeedback)) {
-            $feedback = trim(format_text($rawfeedback, FORMAT_HTML, [
-                'noclean' => true,
-                'para' => false,
-                'filter' => true,
-                'context' => $context,
-            ]));
+            $feedback = simplequiz2_clean_author_html($rawfeedback, $context);
         }
 
         return [

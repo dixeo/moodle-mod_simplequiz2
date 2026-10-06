@@ -32,6 +32,7 @@ class edit_form_context {
      * @param bool $hascontent Whether the slot has any stored content.
      * @param object|null $questiondata Stored question when editing.
      * @param \renderer_base $output Page renderer.
+     * @param \context $modulecontext Module context for cleaned summary HTML.
      * @return array
      */
     public static function question_block_start(
@@ -39,7 +40,8 @@ class edit_form_context {
         int $displaynumber,
         bool $hascontent,
         ?object $questiondata,
-        \renderer_base $output
+        \renderer_base $output,
+        \context $modulecontext
     ): array {
         return [
             'questionid' => $questionid,
@@ -47,7 +49,7 @@ class edit_form_context {
             'hascontent' => $hascontent,
             'summaryhtml' => $output->render_from_template(
                 'mod_simplequiz2/question_summary',
-                question_summary_context::from_stored_question($questiondata)
+                question_summary_context::from_stored_question($questiondata, $modulecontext, $questionid)
             ),
             'buttons' => self::toolbar_buttons($questionid),
             'errornotenough' => get_string('notenoughanswerserror', 'simplequiz2'),
