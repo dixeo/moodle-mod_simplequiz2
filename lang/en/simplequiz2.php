@@ -23,6 +23,8 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 $string['addquestion'] = "Add a question";
+$string['api_attemptresults'] = 'Get attempt results';
+$string['api_questionresults'] = 'Get question results';
 $string['aria_answer_text'] = 'Answer: {$a->answer}';
 $string['aria_audio'] = 'Audio: {$a->description}. Please listen to the sound.';
 $string['aria_image'] = 'Image: {$a->description}.';
@@ -35,7 +37,7 @@ $string['aria_video'] = 'Video: {$a->description}. Please watch the video.';
 $string['attemptsdeleted'] = 'MCQ attempts deleted';
 $string['cantconvertcodeerror'] = 'An error occurred while converting the module, please contact support team';
 $string['check-answer'] = "Check the answer";
-$string['completionminattempts'] = 'The student must complete or attempt the activity one or more times: ';
+$string['completionminattempts'] = 'The student must complete or attempt the activity one or more times:';
 $string['completionminattempts:attempts'] = 'The student must complete or attempt the activity one or more times: {$a}';
 $string['completionminattemptsdesc'] = 'The student must complete or attempt the activity {$a} times';
 $string['completionminattemptsgroup'] = 'Minimum number of attempts';
@@ -51,6 +53,16 @@ $string['editquestion'] = 'Edit question';
 $string['embed_finish'] = 'Exit Quiz';
 $string['embed_result_best'] = 'Best score: {$a->score}/{$a->total} ({$a->percent}%)';
 $string['embed_result_complete'] = 'This attempt: {$a->score}/{$a->total} ({$a->percent}%)';
+$string['error_actioninvalid'] = 'Bad request: the action value is not valid.';
+$string['error_actionrequired'] = 'Bad request: an action is required.';
+$string['error_actionunknown'] = 'Bad request: unknown action {$a}.';
+$string['error_capabilityrequired'] = 'Forbidden: capability required ({$a}).';
+$string['error_invalidattempt'] = 'Forbidden: invalid attempt access.';
+$string['error_moodleexception'] = 'Bad request: Moodle exception ({$a}).';
+$string['error_mustbeenrolled'] = 'Unauthorized: you must be enrolled ({$a}).';
+$string['error_mustbelogged'] = 'Unauthorized: you must be logged in ({$a}).';
+$string['error_paramrequired'] = 'Bad request: {$a} is required but does not exist.';
+$string['error_paramtype'] = 'Bad request: {$a} has an unexpected type.';
 $string['eventquizconversioncompleted'] = 'MCQ converted to Quiz activity';
 $string['formanswertitle'] = 'Answer {$a}';
 $string['formquestiontitle'] = 'Question {$a}';

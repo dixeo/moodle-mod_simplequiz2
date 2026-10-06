@@ -50,10 +50,30 @@ The plugin implements the Moodle **Privacy API** (`classes/privacy/provider.php`
 
 ## Limitations
 
-- **Question model:** Up to **25** questions and **5** answers per question (`SIMPLE_QUIZ2_MAX_QUESTION_NB`, `SIMPLE_QUIZ2_MAX_ANSWER_NB` in `lib.php`). Grading scale is oriented to a **100** point scale (`SIMPLE_QUIZ2_GRADE_MAX`).
+- **Question model:** Up to **25** questions and **5** answers per question (`MOD_SIMPLEQUIZ2_MAX_QUESTION_NB`, `MOD_SIMPLEQUIZ2_MAX_ANSWER_NB` in `lib.php`). Grading scale is oriented to a **100** point scale (`MOD_SIMPLEQUIZ2_GRADE_MAX`).
 - **Question types:** Multiple choice only; export to Quiz creates **multichoice** questions in `mod_quiz`.
 
 ## Plugin dependencies
 
 - **None** for installing the activity.
 - **Export to Quiz** requires the standard **Quiz** module (`mod_quiz`) to be installed and available.
+
+## Databases
+
+Activity deletion and export to Quiz use Moodle’s Data Manipulation API with bound parameters. Both are expected to work on MySQL/MariaDB and PostgreSQL. Automated tests run on MariaDB and PostgreSQL.
+
+# Support
+
+For documentation, licensing or technical support:
+
+**Dixeo**
+
+https://www.dixeo.com
+
+support@dixeo.com
+
+# License
+
+Copyright © Ministère de l'Éducation nationale français and Dixeo
+
+Licensed under the GNU General Public License v3.0 or later.

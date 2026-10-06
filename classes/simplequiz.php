@@ -243,7 +243,7 @@ class simplequiz {
         $currentdata = (array) json_decode($attempt->answers);
 
         // Calculate grade from attempt answers.
-        $grademax = SIMPLE_QUIZ2_GRADE_MAX;
+        $grademax = MOD_SIMPLEQUIZ2_GRADE_MAX;
         $questions = (array) json_decode($this->instance->questions);
         $grade = 0;
 

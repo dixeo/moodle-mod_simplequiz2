@@ -23,6 +23,8 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 $string['addquestion'] = "Aggiungi una domanda";
+$string['api_attemptresults'] = 'Ottieni i risultati del tentativo';
+$string['api_questionresults'] = 'Ottieni i risultati della domanda';
 $string['aria_answer_text'] = 'Risposta: {$a->answer}';
 $string['aria_audio'] = 'Audio: {$a->description}. Ascolta il suono.';
 $string['aria_image'] = 'Immagine: {$a->description}.';
@@ -35,7 +37,7 @@ $string['aria_video'] = 'Video: {$a->description}. Guarda il video.';
 $string['attemptsdeleted'] = 'Tentativi MCQ eliminati';
 $string['cantconvertcodeerror'] = 'Si è verificato un errore durante la conversione del modulo, contatta il team di supporto';
 $string['check-answer'] = "Verifica la risposta";
-$string['completionminattempts'] = 'Lo studente deve completare o tentare l\'attività una o più volte: ';
+$string['completionminattempts'] = 'Lo studente deve completare o tentare l\'attività una o più volte:';
 $string['completionminattempts:attempts'] = 'Lo studente deve completare o tentare l\'attività una o più volte: {$a}';
 $string['completionminattemptsdesc'] = 'Lo studente deve completare o tentare l\'attività {$a} volte';
 $string['completionminattemptsgroup'] = 'Numero minimo di tentativi';
@@ -51,6 +53,16 @@ $string['editquestion'] = 'Modifica domanda';
 $string['embed_finish'] = 'Esci dal quiz';
 $string['embed_result_best'] = 'Miglior punteggio: {$a->score}/{$a->total} ({$a->percent} %)';
 $string['embed_result_complete'] = 'Questo tentativo: {$a->score}/{$a->total} ({$a->percent} %)';
+$string['error_actioninvalid'] = 'Richiesta non valida: il valore dell\'azione non è valido.';
+$string['error_actionrequired'] = 'Richiesta non valida: è richiesta un\'azione.';
+$string['error_actionunknown'] = 'Richiesta non valida: azione sconosciuta {$a}.';
+$string['error_capabilityrequired'] = 'Vietato: è richiesta una capacità ({$a}).';
+$string['error_invalidattempt'] = 'Vietato: accesso al tentativo non valido.';
+$string['error_moodleexception'] = 'Richiesta non valida: eccezione Moodle ({$a}).';
+$string['error_mustbeenrolled'] = 'Non autorizzato: è necessario essere iscritti ({$a}).';
+$string['error_mustbelogged'] = 'Non autorizzato: è necessario aver effettuato l\'accesso ({$a}).';
+$string['error_paramrequired'] = 'Richiesta non valida: {$a} è obbligatorio ma non esiste.';
+$string['error_paramtype'] = 'Richiesta non valida: {$a} ha un tipo imprevisto.';
 $string['eventquizconversioncompleted'] = 'MCQ convertito in attività Quiz';
 $string['formanswertitle'] = 'Risposta {$a}';
 $string['formquestiontitle'] = 'Domanda {$a}';

@@ -22,6 +22,8 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 $string['addquestion'] = 'Adicionar uma pergunta';
+$string['api_attemptresults'] = 'Obter os resultados da tentativa';
+$string['api_questionresults'] = 'Obter os resultados da pergunta';
 $string['aria_answer_text'] = 'Resposta: {$a->answer}';
 $string['aria_audio'] = 'Áudio: {$a->description}. Por favor, ouça o som.';
 $string['aria_image'] = 'Imagem: {$a->description}.';
@@ -34,7 +36,7 @@ $string['aria_video'] = 'Vídeo: {$a->description}. Por favor, visualize o víde
 $string['attemptsdeleted'] = 'Tentativas do QCM eliminadas';
 $string['cantconvertcodeerror'] = 'Ocorreu um erro ao converter o módulo; contacte a equipa de suporte.';
 $string['check-answer'] = 'Verificar a resposta';
-$string['completionminattempts'] = 'O formando deve completar ou tentar a atividade uma ou mais vezes: ';
+$string['completionminattempts'] = 'O formando deve completar ou tentar a atividade uma ou mais vezes:';
 $string['completionminattempts:attempts'] = 'O formando deve completar ou tentar a atividade uma ou mais vezes: {$a}';
 $string['completionminattemptsdesc'] = 'O formando deve completar ou tentar a atividade {$a} vezes.';
 $string['completionminattemptsgroup'] = 'Número mínimo de tentativas';
@@ -50,6 +52,16 @@ $string['editquestion'] = 'Editar pergunta';
 $string['embed_finish'] = 'Sair do questionário';
 $string['embed_result_best'] = 'Melhor pontuação: {$a->score}/{$a->total} ({$a->percent} %)';
 $string['embed_result_complete'] = 'Esta tentativa: {$a->score}/{$a->total} ({$a->percent} %)';
+$string['error_actioninvalid'] = 'Pedido inválido: o valor da ação não é válido.';
+$string['error_actionrequired'] = 'Pedido inválido: é necessária uma ação.';
+$string['error_actionunknown'] = 'Pedido inválido: ação desconhecida {$a}.';
+$string['error_capabilityrequired'] = 'Proibido: é necessária uma capacidade ({$a}).';
+$string['error_invalidattempt'] = 'Proibido: acesso à tentativa inválido.';
+$string['error_moodleexception'] = 'Pedido inválido: exceção do Moodle ({$a}).';
+$string['error_mustbeenrolled'] = 'Não autorizado: tem de estar inscrito ({$a}).';
+$string['error_mustbelogged'] = 'Não autorizado: tem de ter sessão iniciada ({$a}).';
+$string['error_paramrequired'] = 'Pedido inválido: {$a} é obrigatório, mas não existe.';
+$string['error_paramtype'] = 'Pedido inválido: {$a} tem um tipo inesperado.';
 $string['eventquizconversioncompleted'] = 'QCM convertido em atividade Teste';
 $string['formanswertitle'] = 'Resposta {$a}';
 $string['formquestiontitle'] = 'Pergunta {$a}';

@@ -23,16 +23,16 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-define('SIMPLE_QUIZ2_MAX_QUESTION_NB', 25);
-define('SIMPLE_QUIZ2_MAX_ANSWER_NB', 5);
-define('SIMPLE_QUIZ2_GRADE_MAX', 100);
+define('MOD_SIMPLEQUIZ2_MAX_QUESTION_NB', 25);
+define('MOD_SIMPLEQUIZ2_MAX_ANSWER_NB', 5);
+define('MOD_SIMPLEQUIZ2_GRADE_MAX', 100);
 
 /** Combined feedback outcome: fully correct. */
-define('SIMPLE_QUIZ2_FEEDBACK_CORRECT', 'correct');
+define('MOD_SIMPLEQUIZ2_FEEDBACK_CORRECT', 'correct');
 /** Combined feedback outcome: partially correct. */
-define('SIMPLE_QUIZ2_FEEDBACK_PARTIAL', 'partial');
+define('MOD_SIMPLEQUIZ2_FEEDBACK_PARTIAL', 'partial');
 /** Combined feedback outcome: incorrect. */
-define('SIMPLE_QUIZ2_FEEDBACK_INCORRECT', 'incorrect');
+define('MOD_SIMPLEQUIZ2_FEEDBACK_INCORRECT', 'incorrect');
 
 defined('MOODLE_INTERNAL') || die;
 
@@ -144,7 +144,7 @@ function simplequiz2_add_instance($data, $mform) {
     $data->timecreated = time();
 
     // Force grade max at 100.
-    $data->grade = SIMPLE_QUIZ2_GRADE_MAX;
+    $data->grade = MOD_SIMPLEQUIZ2_GRADE_MAX;
 
     // Prepare questions data and store draft files.
     $cmid            = $data->coursemodule;
@@ -191,7 +191,7 @@ function simplequiz2_update_instance($data, $mform) {
     // Set data to match with DB fields.
     $data->id           = $data->instance;
     $data->timemodified = time();
-    $data->grade        = SIMPLE_QUIZ2_GRADE_MAX;
+    $data->grade        = MOD_SIMPLEQUIZ2_GRADE_MAX;
 
     // Prepare questions data and store draft files.
     $cmid            = $data->coursemodule;
@@ -220,8 +220,8 @@ function simplequiz2_delete_instance($id) {
         SELECT cm.*
         FROM {course_modules} cm
         JOIN {modules} m ON cm.module = m.id
-        WHERE m.name = "simplequiz2" AND cm.instance = ?
-    ', [$id]);
+        WHERE m.name = ? AND cm.instance = ?
+    ', ['simplequiz2', $id]);
 
     $events = $DB->get_records('event', [
         'modulename' => 'simplequiz2',
@@ -335,7 +335,7 @@ function simplequiz2_grade_item_update($simplequiz, $grades = null) {
 
     if ($simplequiz->grade >= 0) {
         $params['gradetype'] = GRADE_TYPE_VALUE;
-        $params['grademax']  = SIMPLE_QUIZ2_GRADE_MAX;
+        $params['grademax']  = MOD_SIMPLEQUIZ2_GRADE_MAX;
         $params['grademin']  = 0;
     } else {
         $params['gradetype'] = GRADE_TYPE_NONE;
@@ -520,30 +520,30 @@ function simplequiz2_partiallycorrect_feedback_itemid(int $questionitemid): int 
  *
  * @param bool $iscorrect Fully correct answer.
  * @param bool $haspartialcorrect At least one correct selection but not fully correct.
- * @return string One of SIMPLE_QUIZ2_FEEDBACK_* constants.
+ * @return string One of MOD_SIMPLEQUIZ2_FEEDBACK_* constants.
  */
 function simplequiz2_feedback_outcome_from_grading(bool $iscorrect, bool $haspartialcorrect): string {
     if ($iscorrect) {
-        return SIMPLE_QUIZ2_FEEDBACK_CORRECT;
+        return MOD_SIMPLEQUIZ2_FEEDBACK_CORRECT;
     }
     if ($haspartialcorrect) {
-        return SIMPLE_QUIZ2_FEEDBACK_PARTIAL;
+        return MOD_SIMPLEQUIZ2_FEEDBACK_PARTIAL;
     }
-    return SIMPLE_QUIZ2_FEEDBACK_INCORRECT;
+    return MOD_SIMPLEQUIZ2_FEEDBACK_INCORRECT;
 }
 
 /**
  * File item id for a combined feedback field on a question.
  *
  * @param int $questionitemid Question file item id (order + 1).
- * @param string $outcome One of SIMPLE_QUIZ2_FEEDBACK_* constants.
+ * @param string $outcome One of MOD_SIMPLEQUIZ2_FEEDBACK_* constants.
  * @return int
  */
 function simplequiz2_feedback_itemid_for_outcome(int $questionitemid, string $outcome): int {
     switch ($outcome) {
-        case SIMPLE_QUIZ2_FEEDBACK_CORRECT:
+        case MOD_SIMPLEQUIZ2_FEEDBACK_CORRECT:
             return simplequiz2_correct_feedback_itemid($questionitemid);
-        case SIMPLE_QUIZ2_FEEDBACK_PARTIAL:
+        case MOD_SIMPLEQUIZ2_FEEDBACK_PARTIAL:
             return simplequiz2_partiallycorrect_feedback_itemid($questionitemid);
         default:
             return simplequiz2_incorrect_feedback_itemid($questionitemid);
@@ -554,15 +554,15 @@ function simplequiz2_feedback_itemid_for_outcome(int $questionitemid, string $ou
  * Raw stored HTML for a combined feedback outcome on a question.
  *
  * @param object $question Normalized question object.
- * @param string $outcome One of SIMPLE_QUIZ2_FEEDBACK_* constants.
+ * @param string $outcome One of MOD_SIMPLEQUIZ2_FEEDBACK_* constants.
  * @return string
  */
 function simplequiz2_get_raw_feedback_for_outcome(object $question, string $outcome): string {
     $question = simplequiz2_normalize_question($question);
     switch ($outcome) {
-        case SIMPLE_QUIZ2_FEEDBACK_CORRECT:
+        case MOD_SIMPLEQUIZ2_FEEDBACK_CORRECT:
             return $question->correctfeedback;
-        case SIMPLE_QUIZ2_FEEDBACK_PARTIAL:
+        case MOD_SIMPLEQUIZ2_FEEDBACK_PARTIAL:
             return $question->partiallycorrectfeedback;
         default:
             return $question->incorrectfeedback;
@@ -763,7 +763,7 @@ function simplequiz2_prepare_question_from_mod_form(int $cmid, $data) {
     $questions = [];
 
     // Loop on questions with their answers data.
-    for ($i = 0; $i < SIMPLE_QUIZ2_MAX_QUESTION_NB; $i++) {
+    for ($i = 0; $i < MOD_SIMPLEQUIZ2_MAX_QUESTION_NB; $i++) {
         $fieldname = 'questions' . $i;
         if (!property_exists($data, $fieldname)) {
             continue;
@@ -870,7 +870,7 @@ function simplequiz2_save_editor_files(int $contextid, $newitemid, array $editor
  * @param object $question Normalized question object.
  * @param int $questionorder Zero-based question index.
  * @param int $cmid Course module id.
- * @param string $outcome One of SIMPLE_QUIZ2_FEEDBACK_* constants.
+ * @param string $outcome One of MOD_SIMPLEQUIZ2_FEEDBACK_* constants.
  * @return string Empty string when no feedback is configured.
  */
 function simplequiz2_get_feedback_for_outcome(

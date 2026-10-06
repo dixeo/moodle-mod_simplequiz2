@@ -23,6 +23,8 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 $string['addquestion'] = "Ajouter une question";
+$string['api_attemptresults'] = 'Obtenir les résultats de la tentative';
+$string['api_questionresults'] = 'Obtenir les résultats de la question';
 $string['aria_answer_text'] = 'Réponse : {$a->answer}';
 $string['aria_audio'] = 'Audio: {$a->description}. Veuillez écoutez le son.';
 $string['aria_image'] = 'Image: {$a->description}.';
@@ -35,7 +37,7 @@ $string['aria_video'] = 'Vidéo: {$a->description}. Veuillez visionner la vidéo
 $string['attemptsdeleted'] = 'Suppression des tentatives de QCM';
 $string['cantconvertcodeerror'] = 'Une erreur s\'est produite lors de la conversion du module, veuillez contacter l\'équipe de support';
 $string['check-answer'] = "Vérifier la réponse";
-$string['completionminattempts'] = 'L\'étudiant doit réussir l\'activité ou la tenter une ou plusieurs fois : ';
+$string['completionminattempts'] = 'L\'étudiant doit réussir l\'activité ou la tenter une ou plusieurs fois :';
 $string['completionminattempts:attempts'] = 'L\'étudiant doit réussir l\'activité ou la tenter une ou plusieurs fois : {$a}';
 $string['completionminattemptsdesc'] = 'L\'étudiant doit réussir l\'activité ou la tenter {$a} fois';
 $string['completionminattemptsgroup'] = 'Nombre de tentatives minimum';
@@ -51,6 +53,16 @@ $string['editquestion'] = 'Modifier la question';
 $string['embed_finish'] = 'Quitter le quiz';
 $string['embed_result_best'] = 'Meilleur score : {$a->score}/{$a->total} ({$a->percent} %)';
 $string['embed_result_complete'] = 'Cette tentative : {$a->score}/{$a->total} ({$a->percent} %)';
+$string['error_actioninvalid'] = 'Requête incorrecte : la valeur de l\'action n\'est pas valide.';
+$string['error_actionrequired'] = 'Requête incorrecte : une action est requise.';
+$string['error_actionunknown'] = 'Requête incorrecte : action inconnue {$a}.';
+$string['error_capabilityrequired'] = 'Interdit : une capacité est requise ({$a}).';
+$string['error_invalidattempt'] = 'Interdit : accès à la tentative non valide.';
+$string['error_moodleexception'] = 'Requête incorrecte : exception Moodle ({$a}).';
+$string['error_mustbeenrolled'] = 'Non autorisé : vous devez être inscrit ({$a}).';
+$string['error_mustbelogged'] = 'Non autorisé : vous devez être connecté ({$a}).';
+$string['error_paramrequired'] = 'Requête incorrecte : {$a} est requis mais n\'existe pas.';
+$string['error_paramtype'] = 'Requête incorrecte : {$a} a un type inattendu.';
 $string['eventquizconversioncompleted'] = 'QCM converti en activité Test';
 $string['formanswertitle'] = 'Réponse {$a}';
 $string['formquestiontitle'] = 'Question {$a}';

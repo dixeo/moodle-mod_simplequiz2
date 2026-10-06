@@ -22,6 +22,8 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 $string['addquestion'] = 'Frage hinzufügen';
+$string['api_attemptresults'] = 'Versuchsergebnisse abrufen';
+$string['api_questionresults'] = 'Fragenergebnisse abrufen';
 $string['aria_answer_text'] = 'Antwort: {$a->answer}';
 $string['aria_audio'] = 'Audio: {$a->description}. Bitte hören Sie den Ton.';
 $string['aria_image'] = 'Bild: {$a->description}.';
@@ -34,7 +36,7 @@ $string['aria_video'] = 'Video: {$a->description}. Bitte schauen Sie das Video.'
 $string['attemptsdeleted'] = 'Simple-Quiz-Versuche gelöscht';
 $string['cantconvertcodeerror'] = 'Bei der Konvertierung des Moduls ist ein Fehler aufgetreten. Bitte wenden Sie sich an den Support.';
 $string['check-answer'] = 'Antwort prüfen';
-$string['completionminattempts'] = 'Die/der Lernende muss die Aktivität ein- oder mehrmals abschließen oder versuchen: ';
+$string['completionminattempts'] = 'Die/der Lernende muss die Aktivität ein- oder mehrmals abschließen oder versuchen:';
 $string['completionminattempts:attempts'] = 'Die/der Lernende muss die Aktivität ein- oder mehrmals abschließen oder versuchen: {$a}';
 $string['completionminattemptsdesc'] = 'Die/der Lernende muss die Aktivität {$a}-mal abschließen oder versuchen';
 $string['completionminattemptsgroup'] = 'Mindestanzahl Versuche';
@@ -50,6 +52,16 @@ $string['editquestion'] = 'Frage bearbeiten';
 $string['embed_finish'] = 'Quiz verlassen';
 $string['embed_result_best'] = 'Beste Punktzahl: {$a->score}/{$a->total} ({$a->percent} %)';
 $string['embed_result_complete'] = 'Dieser Versuch: {$a->score}/{$a->total} ({$a->percent} %)';
+$string['error_actioninvalid'] = 'Ungültige Anfrage: der Aktionswert ist nicht gültig.';
+$string['error_actionrequired'] = 'Ungültige Anfrage: eine Aktion ist erforderlich.';
+$string['error_actionunknown'] = 'Ungültige Anfrage: unbekannte Aktion {$a}.';
+$string['error_capabilityrequired'] = 'Verboten: Berechtigung erforderlich ({$a}).';
+$string['error_invalidattempt'] = 'Verboten: ungültiger Zugriff auf den Versuch.';
+$string['error_moodleexception'] = 'Ungültige Anfrage: Moodle-Ausnahme ({$a}).';
+$string['error_mustbeenrolled'] = 'Nicht autorisiert: Sie müssen eingeschrieben sein ({$a}).';
+$string['error_mustbelogged'] = 'Nicht autorisiert: Sie müssen angemeldet sein ({$a}).';
+$string['error_paramrequired'] = 'Ungültige Anfrage: {$a} ist erforderlich, ist aber nicht vorhanden.';
+$string['error_paramtype'] = 'Ungültige Anfrage: {$a} hat einen unerwarteten Typ.';
 $string['eventquizconversioncompleted'] = 'MCQ in Test-Aktivität umgewandelt';
 $string['formanswertitle'] = 'Antwort {$a}';
 $string['formquestiontitle'] = 'Frage {$a}';

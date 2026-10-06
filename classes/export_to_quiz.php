@@ -136,8 +136,8 @@ class export_to_quiz {
             SELECT cm.*
             FROM {course_modules} cm
             JOIN {modules} m ON cm.module = m.id
-            WHERE cm.instance = :quizinstance AND m.name = "quiz"
-        ', ['quizinstance' => $quizid]);
+            WHERE cm.instance = :quizinstance AND m.name = :modulename
+        ', ['quizinstance' => $quizid, 'modulename' => 'quiz']);
 
         $this->quiz = $DB->get_record('quiz', ['id' => $quizid]);
         $this->quizcontext = context_module::instance($this->quizcm->id);

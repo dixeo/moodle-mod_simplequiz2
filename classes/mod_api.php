@@ -113,11 +113,11 @@ abstract class mod_api {
      */
     private function prepare_action($action) {
         if ($action === null) {
-            $this->send(400, 'Bad request : action required.');
+            $this->send(400, get_string('error_actionrequired', 'mod_simplequiz2'));
         } else if ($action === '') {
-            $this->send(400, 'Bad request : action value is not valid.');
+            $this->send(400, get_string('error_actioninvalid', 'mod_simplequiz2'));
         } else if (!in_array((string) $action, $this->get_allowed_actions(), true)) {
-            $this->send(405, 'Bad request : unknown action ' . $action . '.');
+            $this->send(405, get_string('error_actionunknown', 'mod_simplequiz2', $action));
         } else {
             $this->action = $action;
         }
@@ -135,7 +135,7 @@ abstract class mod_api {
     protected function get_param(string $name, $type = FILTER_UNSAFE_RAW, bool $required = true, $default = null) {
         // Check required.
         if ($required === true && isset($this->params->$name) === false) {
-            $this->send(400, "Bad request : $name is required but doesn't exists.");
+            $this->send(400, get_string('error_paramrequired', 'mod_simplequiz2', $name));
         }
 
         // Return default if param doesn't exists.
@@ -148,7 +148,7 @@ abstract class mod_api {
 
         // Return error if value is not filterable with this filter.
         if ($filtered === null || $filtered === false) {
-            $this->send(400, "Bad request : $name got unexpected type.");
+            $this->send(400, get_string('error_paramtype', 'mod_simplequiz2', $name));
         }
 
         // Return filtered value.
@@ -163,7 +163,7 @@ abstract class mod_api {
     public function run() {
         // Defense in depth: never dispatch without an allowlisted action.
         if ($this->action === '' || !in_array($this->action, $this->get_allowed_actions(), true)) {
-            $this->send(405, 'Bad request : unknown action ' . $this->action . '.');
+            $this->send(405, get_string('error_actionunknown', 'mod_simplequiz2', $this->action));
         }
 
         call_user_func([
@@ -182,9 +182,9 @@ abstract class mod_api {
             // Disable redirection to login page.
             require_login(null, false, null, false, true);
         } catch (require_login_exception $moodleexception) {
-            $this->send(401, "Unauthorized : you must be logged ($moodleexception->errorcode)");
+            $this->send(401, get_string('error_mustbelogged', 'mod_simplequiz2', $moodleexception->errorcode));
         } catch (moodle_exception $moodleexception) {
-            $this->send(400, "Bad request : moodle exception ($moodleexception->errorcode)");
+            $this->send(400, get_string('error_moodleexception', 'mod_simplequiz2', $moodleexception->errorcode));
         }
     }
 
@@ -207,11 +207,11 @@ abstract class mod_api {
             require_login($courseid, false, $cm, false, true);
             require_capability('mod/' . $modname . ':view', \context_module::instance($cm->id));
         } catch (require_login_exception $moodleexception) {
-            $this->send(403, "Unauthorized : you must be enrolled ($moodleexception->errorcode)");
+            $this->send(403, get_string('error_mustbeenrolled', 'mod_simplequiz2', $moodleexception->errorcode));
         } catch (\required_capability_exception $moodleexception) {
-            $this->send(403, "Forbidden : capability required ($moodleexception->errorcode)");
+            $this->send(403, get_string('error_capabilityrequired', 'mod_simplequiz2', $moodleexception->errorcode));
         } catch (moodle_exception $moodleexception) {
-            $this->send(400, "Bad request : moodle exception ($moodleexception->errorcode)");
+            $this->send(400, get_string('error_moodleexception', 'mod_simplequiz2', $moodleexception->errorcode));
         }
     }
 
@@ -248,6 +248,6 @@ abstract class mod_api {
      * @return void
      */
     public function __call($name, $arguments): void {
-        $this->send(405, "Bad request : unknown action $name.");
+        $this->send(405, get_string('error_actionunknown', 'mod_simplequiz2', $name));
     }
 }

@@ -52,7 +52,7 @@ class simplequiz_api extends mod_api {
             !$attemptrow || (int) $attemptrow->userid !== (int) $USER->id ||
                 (int) $attemptrow->cmid !== (int) $cm->id
         ) {
-            $this->send(403, 'Forbidden: invalid attempt access.');
+            $this->send(403, get_string('error_invalidattempt', 'mod_simplequiz2'));
         }
     }
 
@@ -113,7 +113,7 @@ class simplequiz_api extends mod_api {
         }
 
         // Return data to the client.
-        $this->send(200, 'Get question results', [
+        $this->send(200, get_string('api_questionresults', 'mod_simplequiz2'), [
             // Status of each selected answers.
             'results' => $results,
             // True if answers are corrects.
@@ -139,7 +139,7 @@ class simplequiz_api extends mod_api {
         $currentgrade = $simplequiz->get_current_grade($USER->id);
 
         // Return data to the client.
-        $this->send(200, 'Get attempt results', [
+        $this->send(200, get_string('api_attemptresults', 'mod_simplequiz2'), [
             // Attempt score.
             'attemptgrade' => $attemptgrade,
             // Best score.

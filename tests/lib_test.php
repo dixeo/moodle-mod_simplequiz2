@@ -248,19 +248,19 @@ final class lib_test extends \advanced_testcase {
 
         $this->assertStringContainsString(
             'Yes!',
-            simplequiz2_get_feedback_for_outcome($question, 0, $cm->id, SIMPLE_QUIZ2_FEEDBACK_CORRECT)
+            simplequiz2_get_feedback_for_outcome($question, 0, $cm->id, MOD_SIMPLEQUIZ2_FEEDBACK_CORRECT)
         );
         $this->assertStringContainsString(
             'Partly.',
-            simplequiz2_get_feedback_for_outcome($question, 0, $cm->id, SIMPLE_QUIZ2_FEEDBACK_PARTIAL)
+            simplequiz2_get_feedback_for_outcome($question, 0, $cm->id, MOD_SIMPLEQUIZ2_FEEDBACK_PARTIAL)
         );
         $this->assertStringContainsString(
             'No.',
-            simplequiz2_get_feedback_for_outcome($question, 0, $cm->id, SIMPLE_QUIZ2_FEEDBACK_INCORRECT)
+            simplequiz2_get_feedback_for_outcome($question, 0, $cm->id, MOD_SIMPLEQUIZ2_FEEDBACK_INCORRECT)
         );
 
         $this->assertSame(
-            SIMPLE_QUIZ2_FEEDBACK_PARTIAL,
+            MOD_SIMPLEQUIZ2_FEEDBACK_PARTIAL,
             simplequiz2_feedback_outcome_from_grading(false, true)
         );
 
@@ -270,7 +270,7 @@ final class lib_test extends \advanced_testcase {
         ]);
         $this->assertSame(
             '',
-            simplequiz2_get_feedback_for_outcome($legacy, 0, $cm->id, SIMPLE_QUIZ2_FEEDBACK_CORRECT)
+            simplequiz2_get_feedback_for_outcome($legacy, 0, $cm->id, MOD_SIMPLEQUIZ2_FEEDBACK_CORRECT)
         );
     }
 
@@ -362,7 +362,7 @@ final class lib_test extends \advanced_testcase {
         $this->assertStringContainsString('No', $question->incorrectfeedback);
         $this->assertStringNotContainsString('onerror', strtolower($question->incorrectfeedback));
 
-        $feedback = simplequiz2_get_feedback_for_outcome($question, 0, $cm->id, SIMPLE_QUIZ2_FEEDBACK_CORRECT);
+        $feedback = simplequiz2_get_feedback_for_outcome($question, 0, $cm->id, MOD_SIMPLEQUIZ2_FEEDBACK_CORRECT);
         $this->assertStringContainsString('Yes', $feedback);
         $this->assertStringNotContainsString('<script', strtolower($feedback));
     }

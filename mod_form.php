@@ -164,7 +164,7 @@ class mod_simplequiz2_mod_form extends moodleform_mod {
 
         $mform = $this->_form;
 
-        for ($i = 0; $i < SIMPLE_QUIZ2_MAX_QUESTION_NB; $i++) {
+        for ($i = 0; $i < MOD_SIMPLEQUIZ2_MAX_QUESTION_NB; $i++) {
             $hascontent   = false;
             $questiontext = '';
             $correctfeedback = '';
@@ -213,7 +213,7 @@ class mod_simplequiz2_mod_form extends moodleform_mod {
                 $mform->addRule("questions$i" . "[text][text]", get_string('required'), 'required');
             }
 
-            for ($j = 0; $j < SIMPLE_QUIZ2_MAX_ANSWER_NB; $j++) {
+            for ($j = 0; $j < MOD_SIMPLEQUIZ2_MAX_ANSWER_NB; $j++) {
                 $answertext = '';
                 if (isset($questionsdata[$i]->answers[$j])) {
                     $answertext = $questionsdata[$i]->answers[$j]->text;
@@ -399,7 +399,7 @@ class mod_simplequiz2_mod_form extends moodleform_mod {
      */
     public function validation($data, $files) {
         if (!empty($data['completionpassgrade'])) {
-            $data['gradepass'] = SIMPLE_QUIZ2_GRADE_MAX;
+            $data['gradepass'] = MOD_SIMPLEQUIZ2_GRADE_MAX;
         }
 
         return parent::validation($data, $files);

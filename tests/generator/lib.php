@@ -73,7 +73,7 @@ class mod_simplequiz2_generator extends testing_module_generator {
         unset($record->questions);
 
         if (!isset($record->grade)) {
-            $record->grade = SIMPLE_QUIZ2_GRADE_MAX;
+            $record->grade = MOD_SIMPLEQUIZ2_GRADE_MAX;
         }
 
         $instance = parent::create_instance($record, (array) $options);
