@@ -24,7 +24,6 @@
  */
 
 require_once(dirname(dirname(dirname(__FILE__))) . '/config.php');
-require_once($CFG->dirroot . '/mod/simplequiz2/classes/export_to_quiz.php');
 
 global $PAGE, $OUTPUT;
 

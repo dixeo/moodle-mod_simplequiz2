@@ -24,7 +24,7 @@
  */
 
 require_once(__DIR__ . '/../../config.php');
-require_once($CFG->dirroot . '/mod/simplequiz2/classes/simplequiz.php');
+require_once($CFG->dirroot . '/mod/simplequiz2/lib.php');
 
 $cmid    = required_param('id', PARAM_INT);
 $cm      = get_coursemodule_from_id('simplequiz2', $cmid);

@@ -26,7 +26,6 @@
 defined('MOODLE_INTERNAL') || die();
 
 require_once($CFG->dirroot . '/course/moodleform_mod.php');
-require_once($CFG->dirroot . '/mod/simplequiz2/classes/database_interface.php');
 require_once($CFG->dirroot . '/mod/simplequiz2/lib.php');
 
 /**
