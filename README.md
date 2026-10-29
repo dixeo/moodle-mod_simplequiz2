@@ -20,7 +20,7 @@ Minimum **Moodle 4.3** (`$plugin->requires` in `version.php`, currently `2023100
 
 ## Installation
 
-Install via **Site administration → Plugins → Install plugins** using a ZIP of the `simplequiz2` folder, or deploy the folder under `mod/simplequiz2` and complete the upgrade prompt.
+Install the release ZIP `mod_simplequiz2-<release>.zip` under **Site administration → Plugins → Install plugins**. You can also copy the `simplequiz2` directory to `mod/simplequiz2`.
 
 ## Source code
 

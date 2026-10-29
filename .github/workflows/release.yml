@@ -1,0 +1,53 @@
+name: Release package
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@v4
+
+      - name: Build the installable ZIP
+        run: |
+          set -euo pipefail
+          component=$(sed -n "s/^\$plugin->component[[:space:]]*=[[:space:]]*'\\([^']*\\)'.*/\\1/p" version.php)
+          release=$(sed -n "s/^\$plugin->release[[:space:]]*=[[:space:]]*'\\([^']*\\)'.*/\\1/p" version.php)
+          if [ "$component" != "mod_simplequiz2" ]; then
+            echo "Unexpected component: ${component}"
+            exit 1
+          fi
+          if [ -z "$release" ]; then
+            echo "Release name is missing from version.php"
+            exit 1
+          fi
+          # Moodle's package validator requires this exact root. It is the
+          # component with the plugin-type prefix removed.
+          plugin=simplequiz2
+          mkdir -p dist
+          asset="dist/${component}-${release}.zip"
+          git archive --format=zip --prefix="${plugin}/" -o "$asset" HEAD
+          roots=$(unzip -Z1 "$asset" | awk -F/ 'NF {print $1}' | sort -u)
+          if [ "$roots" != "$plugin" ]; then
+            echo "Expected a single root directory named ${plugin}"
+            echo "Found:"
+            echo "$roots"
+            exit 1
+          fi
+          if ! unzip -Z1 "$asset" | grep -qx "${plugin}/version.php"; then
+            echo "version.php is not at ${plugin}/version.php"
+            exit 1
+          fi
+
+      - name: Attach the ZIP to the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          fail_on_unmatched_files: true
