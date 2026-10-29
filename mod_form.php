@@ -48,8 +48,6 @@ class mod_simplequiz2_mod_form extends moodleform_mod {
     public function definition(): void {
         global $CFG, $PAGE;
 
-        $PAGE->requires->css('/mod/simplequiz2/styles.css');
-
         $mform = $this->_form;
 
         // Prepare DB interface.
