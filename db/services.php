@@ -39,6 +39,22 @@ $functions = [
         'ajax'        => true,
         'capabilities' => 'block/dixeo_tutor:talktotutor',
     ],
+    'mod_simplequiz2_check_question' => [
+        'classname'   => 'mod_simplequiz2\external\check_question',
+        'methodname'  => 'execute',
+        'description' => 'Grade one activity question and store the result on the attempt',
+        'type'        => 'write',
+        'ajax'        => true,
+        'capabilities' => 'mod/simplequiz2:view',
+    ],
+    'mod_simplequiz2_get_attempt_results' => [
+        'classname'   => 'mod_simplequiz2\external\get_attempt_results',
+        'methodname'  => 'execute',
+        'description' => 'Read the current attempt score and the user best grade',
+        'type'        => 'read',
+        'ajax'        => true,
+        'capabilities' => 'mod/simplequiz2:view',
+    ],
     'mod_simplequiz2_get_unused_draft_itemids' => [
         'classname'   => 'mod_simplequiz2\external\get_unused_draft_itemids',
         'description' => 'Allocate fresh user draft item ids for deferred question editors',

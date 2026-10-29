@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Shared question grading for activity AJAX and embed webservices.
+ * Shared question grading for the activity and embed web services.
  *
  * @package    mod_simplequiz2
  * @copyright  2026 Dixeo (contact@dixeo.com)

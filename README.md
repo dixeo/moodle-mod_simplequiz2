@@ -29,7 +29,7 @@ Install the release ZIP `mod_simplequiz2-<release>.zip` under **Site administrat
 
 ## External services and subscriptions
 
-None.
+The activity player calls `mod_simplequiz2_check_question` and `mod_simplequiz2_get_attempt_results` (`mod/simplequiz2:view`). The tutor embed uses `mod_simplequiz2_render_embed` and `mod_simplequiz2_check_embed_question` (`block/dixeo_tutor:talktotutor`). The question form uses `mod_simplequiz2_get_unused_draft_itemids`. No paid subscriptions.
 
 ## Capabilities
 

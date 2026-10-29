@@ -5,20 +5,20 @@
 // @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
 
 define([
+    'core/ajax',
     'core/config',
     'core/str',
     'core/modal_save_cancel',
     'core/modal_events',
     'core/notification',
     'mod_simplequiz2/player_core',
-], function(Config, str, ModalSaveCancel, ModalEvents, Notification, playerCore) {
+], function(Ajax, Config, str, ModalSaveCancel, ModalEvents, Notification, playerCore) {
 
     const activityPlayer = {
         instanceId: 0,
         courseId: 0,
         courseModuleId: null,
         attemptId: 0,
-        apiUrl: '',
         stringCache: {},
 
         getActivityTitleElement: function() {
@@ -59,7 +59,6 @@ define([
             this.courseId = courseId;
             this.courseModuleId = courseModuleId;
             this.attemptId = attemptId;
-            this.apiUrl = Config.wwwroot + '/mod/simplequiz2/ajax/ajax.php';
 
             const extraStrings = [
                 'questionsuccess', 'questionfail', 'questionpartial',
@@ -118,18 +117,23 @@ define([
                 userChoices.push(selectedAnswers[i].dataset.answerid);
             }
 
-            const data = await this.communicate(this.apiUrl + '?action=check_question&id=' + this.instanceId, {
-                questionid: questionId,
+            const data = await this.callService('mod_simplequiz2_check_question', {
+                coursemoduleid: this.courseModuleId,
+                questionid: parseInt(questionId, 10),
                 attemptid: this.attemptId,
                 answers: userChoices.join(','),
             });
+            if (!data) {
+                return;
+            }
 
+            const results = JSON.parse(data.results || '{}');
             let hasCorrectAnswer = false;
 
             for (let i = 0; i < selectedAnswers.length; i++) {
                 const answerId = selectedAnswers[i].dataset.answerid;
                 selectedAnswers[i].classList.remove('selected');
-                if (data.results[answerId] === true) {
+                if (results[answerId] === true) {
                     selectedAnswers[i].classList.add('question-success');
                     hasCorrectAnswer = true;
                 } else {
@@ -193,9 +197,13 @@ define([
         },
 
         updateResultspage: async function() {
-            const data = await this.communicate(this.apiUrl + '?action=get_attempt_results&id=' + this.instanceId, {
+            const data = await this.callService('mod_simplequiz2_get_attempt_results', {
+                coursemoduleid: this.courseModuleId,
                 attemptid: this.attemptId,
             });
+            if (!data) {
+                return;
+            }
 
             const [attemptLabel, bestLabel] = await str.get_strings([
                 {key: 'result-score', component: 'mod_simplequiz2', param: {score: Math.trunc(data.attemptgrade)}},
@@ -231,54 +239,51 @@ define([
             }
         },
 
-        communicate: async function(url, payload) {
-            const formData = new FormData();
-            formData.append('sesskey', Config.sesskey);
-            formData.append('courseid', this.courseId);
-            formData.append('coursemoduleid', this.courseModuleId);
-
-            if (payload !== null) {
-                for (const [key, value] of Object.entries(payload)) {
-                    formData.append(key, value);
-                }
+        callService: async function(methodname, args) {
+            let failure = null;
+            let result = null;
+            try {
+                result = await Ajax.call([{
+                    methodname: methodname,
+                    args: args,
+                }])[0];
+            } catch (error) {
+                failure = error;
             }
-
-            const response = await fetch(url, {
-                method: 'POST',
-                body: formData,
-            });
-
-            const data = await response.json();
-            this.handleError(response, data);
-            return data;
+            if (failure) {
+                await this.showServiceError(failure);
+                return null;
+            }
+            return result;
         },
 
-        handleError: function(response, data) {
+        showServiceError: async function(error) {
             const redirectHome = function() {
                 location.href = Config.wwwroot;
             };
 
-            if (response.status == 401 || data.errorcode == 'requireloginerror') {
-                ModalSaveCancel.create({
-                    title: this.stringCache.session_expired_title,
-                    body: this.stringCache.session_expired_body,
-                    show: true,
-                    removeOnClose: true,
-                }).then(function(modal) {
-                    modal.getRoot().on(ModalEvents.save, redirectHome);
-                    modal.getRoot().on(ModalEvents.hidden, redirectHome);
-                    setTimeout(redirectHome, 5000);
-                    return modal;
-                }).catch(function() {
-                    redirectHome();
-                });
-            } else if (response.ok === false) {
-                Notification.alert(
-                    'Error ' + response.status,
-                    'Check browser console.',
-                    'Error'
-                );
+            if (error && error.errorcode === 'requireloginerror') {
+                let modal = null;
+                try {
+                    modal = await ModalSaveCancel.create({
+                        title: this.stringCache.session_expired_title,
+                        body: this.stringCache.session_expired_body,
+                        show: true,
+                        removeOnClose: true,
+                    });
+                } catch (modalError) {
+                    if (modalError) {
+                        redirectHome();
+                    }
+                    return;
+                }
+                modal.getRoot().on(ModalEvents.save, redirectHome);
+                modal.getRoot().on(ModalEvents.hidden, redirectHome);
+                setTimeout(redirectHome, 5000);
+                return;
             }
+
+            Notification.exception(error);
         },
     };
 
