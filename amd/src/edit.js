@@ -112,7 +112,10 @@ define(['mod_simplequiz2/editor_helpers', 'core/str', 'core/templates', 'core/no
         editSnapshots: {},
         stringCache: {},
 
-        init: async function() {
+        init: async function(tinyBaseOptions) {
+            if (tinyBaseOptions) {
+                EditorHelpers.setTinyBaseOptions(tinyBaseOptions);
+            }
             const that = this;
             const loaded = await str.get_strings(STRING_KEYS.map((key) => ({
                 key: key,

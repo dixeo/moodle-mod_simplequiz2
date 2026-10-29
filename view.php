@@ -52,8 +52,9 @@ $attemptid = $simplequiz->create_attempt($USER->id);
 echo $OUTPUT->header();
 
 if (!$decodeddata) {
-    // Print message if there is no question.
-    echo "<p>" . get_string('no-questions', 'simplequiz2') . "</p>";
+    echo $OUTPUT->render_from_template('mod_simplequiz2/no_questions', [
+        'message' => get_string('no-questions', 'simplequiz2'),
+    ]);
 } else {
     $converteddata = simplequiz2_rewrite_pluginfile_urls($decodeddata, $cmid);
 

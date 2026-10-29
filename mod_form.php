@@ -85,8 +85,7 @@ class mod_simplequiz2_mod_form extends moodleform_mod {
         // Add standard buttons, common to all modules.
         $this->add_action_buttons();
 
-        // Js to add/remove questions (TinyMCE base options must run after define_questions_fields()).
-        $this->export_tiny_base_options_for_js();
+        // Js to add/remove questions (TinyMCE base options must be ready before editors open).
         $PAGE->requires->strings_for_js([
             'editquestion',
             'savequestion',
@@ -100,18 +99,22 @@ class mod_simplequiz2_mod_form extends moodleform_mod {
             'previewincorrect',
             'formquestiontitle',
         ], 'mod_simplequiz2');
-        $PAGE->requires->js_call_amd('mod_simplequiz2/edit', 'init');
+        $PAGE->requires->js_call_amd('mod_simplequiz2/edit', 'init', [
+            $this->get_tiny_base_options_for_js(),
+        ]);
     }
 
     /**
-     * Pass TinyMCE base options to AMD so deferred editors can be initialised when a question is shown.
+     * TinyMCE base options for deferred editors, or null when Tiny is not the site editor.
+     *
+     * @return array|null
      */
-    private function export_tiny_base_options_for_js(): void {
+    private function get_tiny_base_options_for_js(): ?array {
         global $PAGE;
 
         $pref = editors_get_preferred_editor();
         if (!$pref instanceof \editor_tiny\editor) {
-            return;
+            return null;
         }
 
         $siteconfig = get_config('editor_tiny');
@@ -131,15 +134,7 @@ class mod_simplequiz2_mod_form extends moodleform_mod {
             ),
         ];
 
-        $configoptions = json_encode(convert_to_array($config));
-
-        $inlinejs = <<<EOF
-            require(['mod_simplequiz2/editor_helpers'], (EditorHelpers) => {
-                EditorHelpers.setTinyBaseOptions({$configoptions});
-            });
-        EOF;
-
-        $PAGE->requires->js_amd_inline($inlinejs);
+        return convert_to_array($config);
     }
 
     /**
