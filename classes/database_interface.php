@@ -26,7 +26,6 @@
 namespace mod_simplequiz2;
 
 use dml_exception;
-use Exception;
 use stdClass;
 
 /**
@@ -71,14 +70,11 @@ class database_interface {
      * Return an simplequiz DB row by its id.
      *
      * @param int $id simplequiz instance id.
-     * @return false|mixed|stdClass|void
+     * @return stdClass
+     * @throws dml_exception When the instance does not exist.
      */
     public function get_simplequiz_by_id(int $id) {
-        try {
-            return $this->db->get_record('simplequiz2', ['id' => $id], '*', MUST_EXIST);
-        } catch (Exception $e) {
-            $this->error($e);
-        }
+        return $this->db->get_record('simplequiz2', ['id' => $id], '*', MUST_EXIST);
     }
 
     /**
@@ -173,20 +169,17 @@ class database_interface {
      *
      * @param int $gradeitemid
      * @param int|null $userid
-     * @return void
+     * @return false|float|null Final grade, or false when the user has no grade row.
+     * @throws dml_exception
      */
     public function get_user_grade(int $gradeitemid, int $userid) {
-        try {
-            $record = $this->db->get_record('grade_grades', [
-                'itemid' => $gradeitemid,
-                'userid' => $userid,
-            ], 'finalgrade');
-            if (!$record) {
-                return false;
-            }
-            return $record->finalgrade;
-        } catch (Exception $e) {
-            $this->error($e);
+        $record = $this->db->get_record('grade_grades', [
+            'itemid' => $gradeitemid,
+            'userid' => $userid,
+        ], 'finalgrade');
+        if (!$record) {
+            return false;
         }
+        return $record->finalgrade;
     }
 }
