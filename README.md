@@ -38,7 +38,7 @@ The activity player calls `mod_simplequiz2_check_question` and `mod_simplequiz2_
 | `mod/simplequiz2:addinstance` | Create a SimpleQuiz activity in a course (editing teacher / manager by default). |
 | `mod/simplequiz2:view` | Access the activity and submit attempts (student, teacher, editing teacher, manager by default). |
 
-**Export to Quiz** checks **`mod/quiz:addinstance`** in the activity context (see `convert.php`). Attempt deletion uses **Course reset** (see below).
+**Export to Quiz** requires, in the course context, **`moodle/course:manageactivities`**, **`mod/quiz:addinstance`** and **`moodle/question:add`**, plus **`moodle/course:update`** in a single activity course because the course format is switched to Topics (see `simplequiz2_convert_required_capabilities()` in `lib.php`). The conversion runs in one database transaction and leaves the course unchanged when it fails. Attempt deletion uses **Course reset** (see below).
 
 ## Attempts
 

@@ -24,8 +24,10 @@
  */
 
 require_once(dirname(dirname(dirname(__FILE__))) . '/config.php');
+require_once($CFG->dirroot . '/course/lib.php');
+require_once($CFG->dirroot . '/mod/simplequiz2/lib.php');
 
-global $PAGE, $OUTPUT;
+global $PAGE, $OUTPUT, $DB;
 
 $cmid = required_param('cmid', PARAM_INT);
 $confirm = optional_param('confirm', 0, PARAM_BOOL);
@@ -35,7 +37,8 @@ $course = get_course($cm->course, MUST_EXIST);
 $context = context_module::instance($cm->id);
 
 require_login($course, true, $cm);
-require_capability('mod/quiz:addinstance', $context);
+$coursecontext = context_course::instance($course->id);
+require_all_capabilities(simplequiz2_convert_required_capabilities($course), $coursecontext);
 
 $returnurl = new moodle_url('/course/view.php', ['id' => $cm->course]);
 $pageurl = new moodle_url('/mod/simplequiz2/convert.php', ['cmid' => $cmid]);
@@ -56,42 +59,64 @@ if (!$confirm) {
 
 require_sesskey();
 
-global $DB;
-
 $simplequiz = $DB->get_record('simplequiz2', ['id' => $cm->instance], '*', MUST_EXIST);
 
+// All database changes are made in one transaction so a failure leaves the course untouched.
+$export = null;
 try {
-    // ELEA_RQM-234: change course format if course is singleactivity.
-    if ($course->format == 'singleactivity') {
-        $coursedata = (object) [
-            'id' => $course->id,
-            'format' => 'topics',
-        ];
-        update_course($coursedata);
+    $transaction = $DB->start_delegated_transaction();
+    try {
+        if ($course->format == 'singleactivity') {
+            // A quiz cannot be added next to the single activity: switch to a sectioned format.
+            update_course((object) ['id' => $course->id, 'format' => 'topics']);
 
-        // Remove section 1 to only use section 0.
-        $DB->delete_records('course_sections', ['course' => $course->id, 'section' => 1]);
+            // Keep only section 0 when the single activity format left an empty section 1.
+            $section = $DB->get_record('course_sections', ['course' => $course->id, 'section' => 1]);
+            if ($section && trim((string) $section->sequence) === '') {
+                course_delete_section(get_course($course->id), $section, false);
+            }
+        }
+
+        $export = new \mod_simplequiz2\export_to_quiz($cmid);
+        $export->export_to_quiz();
+
+        $transaction->allow_commit();
+    } catch (\Throwable $e) {
+        $transaction->rollback($e);
     }
-
-    // Export current simplequiz to quiz.
-    $export = new \mod_simplequiz2\export_to_quiz($cmid);
-    $export->export_to_quiz();
-
-    $event = \mod_simplequiz2\event\quiz_conversion_completed::create_from_conversion(
-        $simplequiz,
-        $context,
-        $cm,
-        $export->get_quiz(),
-        $export->get_quiz_course_module()
+} catch (\Throwable $e) {
+    if ($DB->is_transaction_started()) {
+        // A nested transaction opened by core code was left unfinished, so the rollback above
+        // only marked it; roll the whole unit of work back before anything else is written.
+        $DB->force_transaction_rollback();
+    }
+    // Course and module caches may have been rebuilt from rolled back data.
+    rebuild_course_cache($course->id, true);
+    debugging(
+        'Conversion of simplequiz2 course module ' . $cm->id . ' to a quiz failed: ' . $e->getMessage(),
+        DEBUG_NORMAL,
+        $e->getTrace()
     );
-    $event->trigger();
-
     redirect(
         $returnurl,
-        get_string('convert_success', 'simplequiz2'),
+        get_string('cantconvertcodeerror', 'simplequiz2'),
         null,
-        \core\output\notification::NOTIFY_SUCCESS
+        \core\output\notification::NOTIFY_ERROR
     );
-} catch (Exception $e) {
-    redirect($returnurl, get_string('cantconvertcodeerror', 'simplequiz2'));
 }
+
+$event = \mod_simplequiz2\event\quiz_conversion_completed::create_from_conversion(
+    $simplequiz,
+    $context,
+    $cm,
+    $export->get_quiz(),
+    $export->get_quiz_course_module()
+);
+$event->trigger();
+
+redirect(
+    $returnurl,
+    get_string('convert_success', 'simplequiz2'),
+    null,
+    \core\output\notification::NOTIFY_SUCCESS
+);

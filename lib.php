@@ -1042,6 +1042,40 @@ function simplequiz2_rewrite_pluginfile_urls($questions, int $cmid) {
 }
 
 /**
+ * Capabilities required to convert an activity into a quiz in a course.
+ *
+ * The conversion adds a quiz module, creates question bank entries and, in a
+ * single activity course, switches the course format and removes a section.
+ *
+ * @param stdClass $course Course record (format is read).
+ * @return string[]
+ */
+function simplequiz2_convert_required_capabilities($course): array {
+    $capabilities = [
+        'moodle/course:manageactivities',
+        'mod/quiz:addinstance',
+        'moodle/question:add',
+    ];
+    if ($course->format === 'singleactivity') {
+        $capabilities[] = 'moodle/course:update';
+    }
+    return $capabilities;
+}
+
+/**
+ * Whether the current user holds every capability the quiz conversion needs.
+ *
+ * @param stdClass $course Course record.
+ * @return bool
+ */
+function simplequiz2_can_convert_to_quiz($course): bool {
+    return has_all_capabilities(
+        simplequiz2_convert_required_capabilities($course),
+        context_course::instance($course->id)
+    );
+}
+
+/**
  * Extends the settings navigation with the simplequiz settings
  * - button to convert this module into a quiz module
  *
@@ -1055,17 +1089,15 @@ function simplequiz2_rewrite_pluginfile_urls($questions, int $cmid) {
  * @throws moodle_exception
  */
 function simplequiz2_extend_settings_navigation(settings_navigation $settingsnav, ?navigation_node $simplequiznode = null) {
-    global $PAGE, $DB, $COURSE;
+    global $PAGE, $DB;
 
-    // Prepare context to capability check.
     $cmcontext = $PAGE->context;
-    if ($cmcontext instanceof context_module) {
-        $coursecontext = $cmcontext->get_course_context();
+    if (!$cmcontext instanceof context_module || $simplequiznode === null) {
+        return;
     }
 
-    // Add convert to quiz button in simplequiz menu if simplequiz contain at least one question,
-    // and course is not singleactivity.
-    if ($coursecontext && has_capability('mod/quiz:addinstance', $coursecontext)) {
+    // Add the convert to quiz entry when the user may run the whole conversion and the activity has questions.
+    if (simplequiz2_can_convert_to_quiz($PAGE->course)) {
         $cm        = get_coursemodule_from_id('simplequiz2', $cmcontext->instanceid);
         $mod       = $DB->get_record('simplequiz2', ['id' => $cm->instance]);
         $questions = (array) json_decode($mod->questions);
