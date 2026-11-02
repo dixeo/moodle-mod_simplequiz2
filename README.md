@@ -29,7 +29,7 @@ Install the release ZIP `mod_simplequiz2-<release>.zip` under **Site administrat
 
 ## External services and subscriptions
 
-The activity player calls `mod_simplequiz2_check_question` and `mod_simplequiz2_get_attempt_results` (`mod/simplequiz2:view`). The tutor embed uses `mod_simplequiz2_render_embed` and `mod_simplequiz2_check_embed_question` (`block/dixeo_tutor:talktotutor`); they are unavailable when block_dixeo_tutor is not installed, and the posted question list is limited to the activity limits below (plus a payload size, JSON depth and per-field length limit, see `classes/util/embed_payload.php`). The question form uses `mod_simplequiz2_get_unused_draft_itemids`. No paid subscriptions.
+The activity player calls `mod_simplequiz2_check_question` and `mod_simplequiz2_get_attempt_results` (`mod/simplequiz2:view`). The tutor embed uses `mod_simplequiz2_render_embed` and `mod_simplequiz2_check_embed_question` (`block/dixeo_tutor:talktotutor`); they are unavailable when block_dixeo_tutor is not installed, and the posted question list is limited to the activity limits below (plus a payload size, JSON depth and per-field length limit, see `classes/util/embed_payload.php`). The question form uses `mod_simplequiz2_get_unused_draft_itemids` and `mod_simplequiz2_render_question_summary` (`moodle/course:manageactivities`), which returns the cleaned summary of an edited question. No paid subscriptions.
 
 ## Capabilities
 

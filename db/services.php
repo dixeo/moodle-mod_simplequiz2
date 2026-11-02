@@ -55,6 +55,13 @@ $functions = [
         'ajax'        => true,
         'capabilities' => 'mod/simplequiz2:view',
     ],
+    'mod_simplequiz2_render_question_summary' => [
+        'classname'   => 'mod_simplequiz2\external\render_question_summary',
+        'description' => 'Render the cleaned edit-form summary of one question',
+        'type'        => 'read',
+        'ajax'        => true,
+        'capabilities' => 'moodle/course:manageactivities',
+    ],
     'mod_simplequiz2_get_unused_draft_itemids' => [
         'classname'   => 'mod_simplequiz2\external\get_unused_draft_itemids',
         'description' => 'Allocate fresh user draft item ids for deferred question editors',

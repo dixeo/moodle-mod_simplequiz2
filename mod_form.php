@@ -101,6 +101,7 @@ class mod_simplequiz2_mod_form extends moodleform_mod {
         ], 'mod_simplequiz2');
         $PAGE->requires->js_call_amd('mod_simplequiz2/edit', 'init', [
             $this->get_tiny_base_options_for_js(),
+            $this->context->id,
         ]);
     }
 

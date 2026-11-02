@@ -21,8 +21,8 @@
  * @license     http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-define(['mod_simplequiz2/editor_helpers', 'core/str', 'core/templates', 'core/notification'],
-    function(EditorHelpers, str, Templates, Notification) {
+define(['mod_simplequiz2/editor_helpers', 'core/str', 'core/templates', 'core/notification', 'core/ajax'],
+    function(EditorHelpers, str, Templates, Notification, Ajax) {
 
     const STRING_KEYS = [
         'editquestion',
@@ -38,8 +38,6 @@ define(['mod_simplequiz2/editor_helpers', 'core/str', 'core/templates', 'core/no
         'previewincorrect',
         'formquestiontitle',
     ];
-
-    const SUMMARY_TEMPLATE = 'mod_simplequiz2/question_summary';
 
     /**
      * True if some checked "correct answer" checkbox points to an answer slot with content.
@@ -111,11 +109,13 @@ define(['mod_simplequiz2/editor_helpers', 'core/str', 'core/templates', 'core/no
         activeEditQuestionId: null,
         editSnapshots: {},
         stringCache: {},
+        contextId: 0,
 
-        init: async function(tinyBaseOptions) {
+        init: async function(tinyBaseOptions, contextId) {
             if (tinyBaseOptions) {
                 EditorHelpers.setTinyBaseOptions(tinyBaseOptions);
             }
+            this.contextId = contextId;
             const that = this;
             const loaded = await str.get_strings(STRING_KEYS.map((key) => ({
                 key: key,
@@ -124,8 +124,6 @@ define(['mod_simplequiz2/editor_helpers', 'core/str', 'core/templates', 'core/no
             STRING_KEYS.forEach((key, index) => {
                 that.stringCache[key] = loaded[index];
             });
-
-            await Templates.prefetchTemplates([SUMMARY_TEMPLATE]);
 
             that.organizeQuestionBlocks();
 
@@ -139,17 +137,13 @@ define(['mod_simplequiz2/editor_helpers', 'core/str', 'core/templates', 'core/no
                     if (document.querySelector('input[name="coursemodule"]').value === '') {
                         that.checkQuestionsAnswersWarnings([questionId]);
                     }
-                    await that.updateQuestionSummary(questionId);
                     continue;
                 }
 
                 const meta = that.getQuestionMeta(questionId);
                 if (!meta || meta.dataset.hasContent !== '1') {
                     that.setQuestionBlockHidden(questionId, true);
-                    continue;
                 }
-
-                await that.updateQuestionSummary(questionId);
             }
 
             that.checkIfCanAddQuestion();
@@ -519,29 +513,21 @@ define(['mod_simplequiz2/editor_helpers', 'core/str', 'core/templates', 'core/no
         },
 
         /**
-         * Build Mustache context for the question summary template from live editors.
+         * Collect the current editor values of one question for server-side rendering.
          *
          * @param {string} questionId Question index
          * @return {Object}
          */
-        buildQuestionSummaryContext: function(questionId) {
-            const strings = this.stringCache;
-            const context = {
-                hasquestion: false,
-                questiontext: '',
-                hasanswers: false,
-                answerheading: strings.previewanswers || 'Answers',
+        collectQuestionFields: function(questionId) {
+            const fields = {
+                text: EditorHelpers.getEditorHtml(EditorHelpers.questionTextElementId(questionId)),
                 answers: [],
-                hasfeedback: false,
-                feedbackheading: strings.previewfeedback || 'Feedback',
-                feedbackitems: [],
+                correctfeedback: EditorHelpers.getEditorHtml(EditorHelpers.correctFeedbackElementId(questionId)),
+                partiallycorrectfeedback: EditorHelpers.getEditorHtml(
+                    EditorHelpers.partiallyCorrectFeedbackElementId(questionId)
+                ),
+                incorrectfeedback: EditorHelpers.getEditorHtml(EditorHelpers.incorrectFeedbackElementId(questionId)),
             };
-
-            const questionHtml = EditorHelpers.getEditorHtml(EditorHelpers.questionTextElementId(questionId));
-            if (EditorHelpers.stripEmptyHtml(questionHtml) !== '') {
-                context.hasquestion = true;
-                context.questiontext = questionHtml;
-            }
 
             for (let answerId = 0; answerId < 5; answerId++) {
                 const answerHtml = EditorHelpers.getEditorHtml(EditorHelpers.answerElementId(questionId, answerId));
@@ -551,42 +537,22 @@ define(['mod_simplequiz2/editor_helpers', 'core/str', 'core/templates', 'core/no
                 const checkbox = document.querySelector(
                     '#id_questions' + questionId + '_correctanswers_' + answerId
                 );
-                context.answers.push({
+                fields.answers.push({
                     text: answerHtml,
                     iscorrect: !!(checkbox && checkbox.checked),
                 });
             }
-            context.hasanswers = context.answers.length > 0;
 
-            const feedbackFields = [
-                {
-                    id: EditorHelpers.correctFeedbackElementId(questionId),
-                    label: strings.previewcorrect || 'Correct',
-                },
-                {
-                    id: EditorHelpers.partiallyCorrectFeedbackElementId(questionId),
-                    label: strings.previewpartial || 'Partially correct',
-                },
-                {
-                    id: EditorHelpers.incorrectFeedbackElementId(questionId),
-                    label: strings.previewincorrect || 'Incorrect',
-                },
-            ];
-            feedbackFields.forEach((field) => {
-                const feedbackHtml = EditorHelpers.getEditorHtml(field.id);
-                if (EditorHelpers.stripEmptyHtml(feedbackHtml) === '') {
-                    return;
-                }
-                context.feedbackitems.push({
-                    label: field.label,
-                    text: feedbackHtml,
-                });
-            });
-            context.hasfeedback = context.feedbackitems.length > 0;
-
-            return context;
+            return fields;
         },
 
+        /**
+         * Replace the summary of one question with HTML rendered and cleaned by the server.
+         *
+         * Editor values are never inserted into the page directly.
+         *
+         * @param {string} questionId Question index
+         */
         updateQuestionSummary: async function(questionId) {
             const block = this.getQuestionBlock(questionId);
             if (!block) {
@@ -596,10 +562,20 @@ define(['mod_simplequiz2/editor_helpers', 'core/str', 'core/templates', 'core/no
             if (!summaryEl) {
                 return;
             }
-            const context = this.buildQuestionSummaryContext(questionId);
-            const {html, js} = await Templates.renderForPromise(SUMMARY_TEMPLATE, context);
-            summaryEl.innerHTML = html;
-            Templates.runTemplateJS(js);
+            let response = null;
+            try {
+                response = await Ajax.call([{
+                    methodname: 'mod_simplequiz2_render_question_summary',
+                    args: {
+                        contextid: this.contextId,
+                        question: this.collectQuestionFields(questionId),
+                    },
+                }])[0];
+            } catch (error) {
+                Notification.exception(error);
+                return;
+            }
+            await Templates.replaceNodeContents(summaryEl, response.html, '');
         },
 
         fixQuestionOrder: function() {
