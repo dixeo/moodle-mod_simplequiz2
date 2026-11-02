@@ -198,7 +198,7 @@ class mod_simplequiz2_mod_form extends moodleform_mod {
                 ['rows' => 3, 'class' => 'question-text-editor simplequiz2-editor-field'],
                 "id_questions{$i}_text",
                 $hascontent ? $questiontext : null,
-                $hascontent ? $questionitemid : 0
+                $hascontent ? \mod_simplequiz2\util\file_itemid::question_text($i) : 0
             );
 
             if ($i == 0) {
@@ -212,7 +212,7 @@ class mod_simplequiz2_mod_form extends moodleform_mod {
                 }
 
                 $answerfieldname = "questions{$i}[answers][{$j}]";
-                $answerfileitemid = (int) ($questionitemid . ($j + 1));
+                $answerfileitemid = \mod_simplequiz2\util\file_itemid::answer($i, $j);
                 $this->add_deferred_editor(
                     $mform,
                     $answerfieldname,

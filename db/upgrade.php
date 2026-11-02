@@ -133,5 +133,25 @@ function xmldb_simplequiz2_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026110200, 'mod', 'simplequiz2');
     }
 
+    if ($oldversion < 2026110201) {
+        // Move question, answer and feedback files to non-overlapping file item ids.
+        $sql = "SELECT sq.id, sq.questions, cm.id AS cmid
+                  FROM {simplequiz2} sq
+                  JOIN {course_modules} cm ON cm.instance = sq.id
+                  JOIN {modules} m ON m.id = cm.module AND m.name = :modname";
+        $rs = $DB->get_recordset_sql($sql, ['modname' => 'simplequiz2']);
+        foreach ($rs as $record) {
+            $context = context_module::instance($record->cmid, IGNORE_MISSING);
+            if (!$context) {
+                continue;
+            }
+            $questions = json_decode((string) $record->questions, true);
+            \mod_simplequiz2\util\file_itemid::migrate_legacy_files($context, is_array($questions) ? $questions : []);
+        }
+        $rs->close();
+
+        upgrade_plugin_savepoint(true, 2026110201, 'mod', 'simplequiz2');
+    }
+
     return true;
 }

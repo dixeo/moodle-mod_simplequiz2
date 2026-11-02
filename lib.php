@@ -492,7 +492,7 @@ function simplequiz2_pluginfile($course, $cm, $context, $filearea, $args, $force
  * @return int
  */
 function simplequiz2_correct_feedback_itemid(int $questionitemid): int {
-    return $questionitemid * 10 + 6;
+    return \mod_simplequiz2\util\file_itemid::feedback($questionitemid - 1, MOD_SIMPLEQUIZ2_FEEDBACK_CORRECT);
 }
 
 /**
@@ -502,7 +502,7 @@ function simplequiz2_correct_feedback_itemid(int $questionitemid): int {
  * @return int
  */
 function simplequiz2_incorrect_feedback_itemid(int $questionitemid): int {
-    return $questionitemid * 10 + 7;
+    return \mod_simplequiz2\util\file_itemid::feedback($questionitemid - 1, MOD_SIMPLEQUIZ2_FEEDBACK_INCORRECT);
 }
 
 /**
@@ -512,7 +512,7 @@ function simplequiz2_incorrect_feedback_itemid(int $questionitemid): int {
  * @return int
  */
 function simplequiz2_partiallycorrect_feedback_itemid(int $questionitemid): int {
-    return $questionitemid * 10 + 8;
+    return \mod_simplequiz2\util\file_itemid::feedback($questionitemid - 1, MOD_SIMPLEQUIZ2_FEEDBACK_PARTIAL);
 }
 
 /**
@@ -776,29 +776,44 @@ function simplequiz2_prepare_question_from_mod_form(int $cmid, $data) {
             continue;
         }
 
-        // Start at one to avoid 0 to be removed when concate to answer item id.
-        $questionitemid = $questionrawdata['questionorder'] + 1;
+        $questionorder = (int) $questionrawdata['questionorder'];
+        if ($questionorder < 0 || $questionorder >= MOD_SIMPLEQUIZ2_MAX_QUESTION_NB) {
+            continue;
+        }
+        $questionitemid = $questionorder + 1;
 
         // Prepare question data and store files.
         $question          = new stdClass();
-        $question->text    = simplequiz2_save_editor_files($context->id, $questionitemid, $questionrawdata['text']);
+        $question->text    = simplequiz2_save_editor_files(
+            $context->id,
+            \mod_simplequiz2\util\file_itemid::question_text($questionorder),
+            $questionrawdata['text']
+        );
         $question->answers = [];
 
         // Prepare answers data (convert text and exlude empty answer).
-        $answeritemid = 1;
+        $answerorder = 0;
         foreach ($questionrawdata['answers'] as $order => $answerdata) {
             if (\mod_simplequiz2\util\editor_content::is_empty($answerdata['text'] ?? '')) {
                 continue;
             }
 
+            if ($answerorder >= MOD_SIMPLEQUIZ2_MAX_ANSWER_NB) {
+                break;
+            }
+
             // Prepare object and store files.
             $answer              = (object) [
-                'text'      => simplequiz2_save_editor_files($context->id, $questionitemid . $answeritemid, $answerdata),
+                'text'      => simplequiz2_save_editor_files(
+                    $context->id,
+                    \mod_simplequiz2\util\file_itemid::answer($questionorder, $answerorder),
+                    $answerdata
+                ),
                 'iscorrect' => $questionrawdata['correctanswers'][$order],
             ];
             $question->answers[] = $answer;
 
-            $answeritemid++;
+            $answerorder++;
         }
 
         $question->correctfeedback = '';
@@ -838,7 +853,7 @@ function simplequiz2_prepare_question_from_mod_form(int $cmid, $data) {
         }
 
         // Add question at correct order.
-        $questions[$questionrawdata['questionorder']] = simplequiz2_normalize_question($question);
+        $questions[$questionorder] = simplequiz2_normalize_question($question);
     }
 
     // Fix questions order in the array and return it.
@@ -912,17 +927,33 @@ function simplequiz2_rewrite_pluginfile_urls($questions, int $cmid) {
             $questiondata = (object) $questiondata;
         }
         $questiondata = simplequiz2_normalize_question($questiondata);
+        if (!\mod_simplequiz2\util\file_itemid::has_itemid((int) $order)) {
+            // Out-of-range positions have no file area item; clean the HTML only.
+            $questions[$order] = simplequiz2_clean_questions_html([$questiondata], $context)[0];
+            continue;
+        }
         $questionitemid = $order + 1;
 
-        $questiondata->text = simplequiz2_format_stored_html($questiondata->text, $context, $questionitemid);
+        $questiondata->text = simplequiz2_format_stored_html(
+            $questiondata->text,
+            $context,
+            \mod_simplequiz2\util\file_itemid::question_text((int) $order)
+        );
 
         // Answers.
         foreach ($questiondata->answers as $answerorder => $answerdata) {
             if (is_array($answerdata)) {
                 $answerdata = (object) $answerdata;
             }
-            $answeritemid = (int) ($questionitemid . ($answerorder + 1));
-            $answerdata->text = simplequiz2_format_stored_html($answerdata->text, $context, $answeritemid);
+            if (\mod_simplequiz2\util\file_itemid::has_itemid((int) $order, (int) $answerorder)) {
+                $answerdata->text = simplequiz2_format_stored_html(
+                    $answerdata->text,
+                    $context,
+                    \mod_simplequiz2\util\file_itemid::answer((int) $order, (int) $answerorder)
+                );
+            } else {
+                $answerdata->text = simplequiz2_clean_author_html((string) $answerdata->text, $context);
+            }
             $questiondata->answers[$answerorder] = $answerdata;
         }
 

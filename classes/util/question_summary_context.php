@@ -86,6 +86,9 @@ class question_summary_context {
             return $context;
         }
 
+        if ($questionindex !== null && !file_itemid::has_itemid($questionindex)) {
+            $questionindex = null;
+        }
         $questionitemid = $questionindex === null ? null : $questionindex + 1;
 
         if (!editor_content::is_empty($questiondata->text ?? '')) {
@@ -93,7 +96,7 @@ class question_summary_context {
             $context['questiontext'] = self::format_author_html(
                 (string) $questiondata->text,
                 $modulecontext,
-                $questionitemid
+                $questionindex === null ? null : file_itemid::question_text($questionindex)
             );
         }
 
@@ -106,8 +109,8 @@ class question_summary_context {
                     continue;
                 }
                 $answeritemid = null;
-                if ($questionitemid !== null) {
-                    $answeritemid = (int) ($questionitemid . ((int) $answerorder + 1));
+                if ($questionindex !== null && file_itemid::has_itemid($questionindex, (int) $answerorder)) {
+                    $answeritemid = file_itemid::answer($questionindex, (int) $answerorder);
                 }
                 $context['answers'][] = [
                     'text' => self::format_author_html((string) $answer->text, $modulecontext, $answeritemid),

@@ -135,8 +135,20 @@ class restore_simplequiz2_activity_structure_step extends restore_activity_struc
      * Link restored files into the new activity context.
      */
     protected function after_execute() {
+        global $DB;
+
         // Move files into the restored plugin location.
         $this->add_related_files('mod_simplequiz2', 'intro', null);
         $this->add_related_files('mod_simplequiz2', 'data', null);
+
+        // Backups from versions with overlapping file item ids are moved to the current scheme.
+        if ((int) $this->task->get_old_moduleversion() < 2026110201) {
+            $questions = $DB->get_field('simplequiz2', 'questions', ['id' => $this->task->get_activityid()]);
+            $questions = json_decode((string) $questions, true);
+            \mod_simplequiz2\util\file_itemid::migrate_legacy_files(
+                \context::instance_by_id($this->task->get_contextid()),
+                is_array($questions) ? $questions : []
+            );
+        }
     }
 }
