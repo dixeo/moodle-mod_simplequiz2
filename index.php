@@ -85,10 +85,14 @@ foreach ($instances as $instance) {
         $printsection = '<span class="smallinfo">' . userdate($instance->timemodified) . '</span>';
     }
 
-    $class = $instance->visible ? '' : 'class="dimmed"';
+    $linkattributes = $instance->visible ? [] : ['class' => 'dimmed'];
     $table->data[] = [
         $printsection,
-        "<a $class href=\"view.php?id=$cm->id\">" . format_string($instance->name) . '</a>',
+        html_writer::link(
+            new moodle_url('/mod/simplequiz2/view.php', ['id' => $cm->id]),
+            format_string($instance->name, true, ['context' => context_module::instance($cm->id)]),
+            $linkattributes
+        ),
         format_module_intro('simplequiz2', $instance, $cm->id),
     ];
 }
