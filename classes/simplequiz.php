@@ -71,7 +71,7 @@ class simplequiz {
 
         // Get activity info if activity already exist.
         if ($cmid) {
-            $this->cm = get_coursemodule_from_id('simplequiz2', $cmid);
+            $this->cm = get_coursemodule_from_id('simplequiz2', $cmid, 0, false, MUST_EXIST);
             $this->instance = $this->db->get_simplequiz_by_id($this->cm->instance);
         }
     }
@@ -143,6 +143,7 @@ class simplequiz {
             'userid' => $userid,
             'answers' => json_encode([]),
             'timecreated' => time(),
+            'timefinished' => 0,
         ];
 
         $attemptid = $this->db->add_attempt_data($attemptdata);
@@ -151,55 +152,96 @@ class simplequiz {
     }
 
     /**
-     * Add an user attempt ? todo
+     * Return the user's open attempt that has no answer yet, creating one if needed.
+     *
+     * Viewing the activity therefore never adds more than one empty attempt per user;
+     * a new row is only created once the previous one holds at least one answer.
+     *
+     * @param int $userid User id.
+     * @return int Attempt data row id.
+     */
+    public function get_or_create_open_attempt(int $userid): int {
+        global $DB;
+
+        $select = 'cmid = :cmid AND userid = :userid AND timefinished = 0 AND '
+            . $DB->sql_compare_text('answers', 10) . ' = :empty';
+        $records = $DB->get_records_select('simplequiz2_attempt_data', $select, [
+            'cmid' => $this->cm->id,
+            'userid' => $userid,
+            'empty' => json_encode([]),
+        ], 'id DESC', 'id', 0, 1);
+
+        if ($records) {
+            return (int) reset($records)->id;
+        }
+
+        return (int) $this->create_attempt($userid);
+    }
+
+    /**
+     * Record the result of one question on an attempt and finish the attempt after the last question.
+     *
+     * Questions must be answered once each, in order, on an attempt that is not finished.
+     * When every question is answered the attempt is marked finished, counted once in the
+     * user's attempt summary and graded.
      *
      * @param int $attemptid Attempt data row id.
      * @param int $questionid Question index in activity data.
      * @param bool $answerstatus Whether the submitted answers for the question are fully correct.
-     * @return bool
+     * @return bool True when this answer finished the attempt.
+     * @throws \moodle_exception When the question cannot be answered on this attempt.
      */
-    public function add_attempt_answer(int $attemptid, int $questionid, bool $answerstatus) {
-        // Get attempt other result.
-        $attempt = $this->db->get_attempt_data($attemptid);
-
-        if (!$attempt) {
-            return false;
-        }
-        $currentdata = (array) json_decode($attempt->answers);
-
-        // Update attempt data with the new answers.
-        $currentdata[(string) $questionid] = $answerstatus;
-        $newdata = [
-            'id' => $attempt->id,
-            'answers' => json_encode($currentdata),
-        ];
-
-        $this->db->update_attempt_data($newdata);
-
-        // If it's the last question, finished the attempt and update user grade.
-        // If user now has max grade, mark user attempts has completed.
+    public function add_attempt_answer(int $attemptid, int $questionid, bool $answerstatus): bool {
         $questions = (array) json_decode($this->instance->questions);
-        if ($questionid == (count($questions) - 1)) {
-            $attemptgrade = $this->get_attempt_grade($attempt->id);
-            $currentgrade = $this->get_current_grade($attempt->userid);
+        if (!array_key_exists($questionid, $questions)) {
+            throw new \invalid_parameter_exception('Invalid question index');
+        }
 
-            // Add one to the attempts counter and mark has completed if needed.
-            $completed = $attemptgrade == $this->instance->grade ? 1 : 0;
-            $this->finish_attempt($attempt, $completed);
+        // Serialise concurrent submissions on the same attempt.
+        $lockfactory = \core\lock\lock_config::get_lock_factory('mod_simplequiz2_attempt');
+        $lock = $lockfactory->get_lock('attempt_' . $attemptid, 10);
+        if (!$lock) {
+            throw new \moodle_exception('locktimeout', 'moodle');
+        }
 
-            // Update user grade if attempt grade is higher than current grade.
-            if ($attemptgrade >= $currentgrade) {
-                // Prepare grade item other info.
-                $gradeitem = $this->db->get_simplequiz_gradeitem($this->instance->id, $this->cm->course);
-                $gradeitem->name = $this->cm->name;
-                $gradeitem->cmidnumber = $this->cm->id;
-                $gradeitem->grade = $this->instance->grade;
-                $gradeitem->id = $this->instance->id;
-                $gradeitem->course = $this->instance->course;
-                $gradeobj = $this->set_grade($attempt->userid, $attemptgrade);
-
-                simplequiz2_grade_item_update($gradeitem, $gradeobj);
+        try {
+            $attempt = $this->db->get_attempt_data($attemptid);
+            if (!$attempt || (int) $attempt->cmid !== (int) $this->cm->id) {
+                throw new \moodle_exception('error_invalidattempt', 'mod_simplequiz2');
             }
+            if (!empty($attempt->timefinished)) {
+                throw new \moodle_exception('error_attemptfinished', 'mod_simplequiz2');
+            }
+
+            $currentdata = json_decode($attempt->answers, true);
+            $currentdata = is_array($currentdata) ? $currentdata : [];
+            if (array_key_exists($questionid, $currentdata)) {
+                throw new \moodle_exception('error_alreadyanswered', 'mod_simplequiz2');
+            }
+
+            $questionkeys = array_map('intval', array_keys($questions));
+            $expected = $questionkeys[count($currentdata)] ?? null;
+            if ($expected !== $questionid) {
+                throw new \moodle_exception('error_questionoutoforder', 'mod_simplequiz2');
+            }
+
+            $currentdata[$questionid] = $answerstatus;
+            $finished = count($currentdata) >= count($questions);
+
+            $newdata = (object) [
+                'id' => $attempt->id,
+                'answers' => json_encode($currentdata),
+            ];
+            if ($finished) {
+                $newdata->timefinished = time();
+            }
+            $this->db->update_attempt_data($newdata);
+
+            if ($finished) {
+                $this->grade_finished_attempt($attempt);
+            }
+        } finally {
+            $lock->release();
         }
 
         // Update completion state.
@@ -207,6 +249,37 @@ class simplequiz {
         $completion = new completion_info($course);
         if ($completion->is_enabled($this->cm) && $this->instance->completionminattempts) {
             $completion->update_state($this->cm, COMPLETION_COMPLETE);
+        }
+
+        return $finished;
+    }
+
+    /**
+     * Count a finished attempt in the user's summary and push a better grade to the gradebook.
+     *
+     * @param stdClass $attempt Attempt data row.
+     * @return void
+     */
+    private function grade_finished_attempt(stdClass $attempt): void {
+        $attemptgrade = $this->get_attempt_grade($attempt->id);
+        $currentgrade = $this->get_current_grade($attempt->userid);
+
+        // Add one to the attempts counter and mark has completed if needed.
+        $completed = $attemptgrade == $this->instance->grade ? 1 : 0;
+        $this->finish_attempt($attempt, $completed);
+
+        // Update user grade if attempt grade is higher than current grade.
+        if ($attemptgrade >= $currentgrade) {
+            // Prepare grade item other info.
+            $gradeitem = $this->db->get_simplequiz_gradeitem($this->instance->id, $this->cm->course);
+            $gradeitem->name = $this->cm->name;
+            $gradeitem->cmidnumber = $this->cm->id;
+            $gradeitem->grade = $this->instance->grade;
+            $gradeitem->id = $this->instance->id;
+            $gradeitem->course = $this->instance->course;
+            $gradeobj = $this->set_grade($attempt->userid, $attemptgrade);
+
+            simplequiz2_grade_item_update($gradeitem, $gradeobj);
         }
     }
 

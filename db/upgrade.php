@@ -114,5 +114,24 @@ function xmldb_simplequiz2_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026032811, 'mod', 'simplequiz2');
     }
 
+    if ($oldversion < 2026110200) {
+        // Track when an attempt is finished so it is graded and counted only once.
+        $table = new xmldb_table('simplequiz2_attempt_data');
+        $field = new xmldb_field('timefinished', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'timecreated');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Existing attempts that hold answers cannot be resumed by the player: close them.
+        $DB->execute(
+            "UPDATE {simplequiz2_attempt_data}
+                SET timefinished = timecreated
+              WHERE timefinished = 0 AND " . $DB->sql_compare_text('answers', 10) . " <> :empty",
+            ['empty' => '[]']
+        );
+
+        upgrade_plugin_savepoint(true, 2026110200, 'mod', 'simplequiz2');
+    }
+
     return true;
 }

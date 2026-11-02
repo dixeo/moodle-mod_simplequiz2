@@ -121,6 +121,12 @@ class restore_simplequiz2_activity_structure_step extends restore_activity_struc
         }
 
         $data->timecreated = $this->apply_date_offset($data->timecreated);
+        if (!isset($data->timefinished)) {
+            // Backups without this field: attempts holding answers cannot be resumed, so close them.
+            $data->timefinished = ((string) $data->answers !== '[]') ? $data->timecreated : 0;
+        } else if ($data->timefinished) {
+            $data->timefinished = $this->apply_date_offset($data->timefinished);
+        }
 
         $DB->insert_record('simplequiz2_attempt_data', $data);
     }

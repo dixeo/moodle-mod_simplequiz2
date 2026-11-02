@@ -27,7 +27,7 @@ require_once(__DIR__ . '/../../config.php');
 require_once($CFG->dirroot . '/mod/simplequiz2/lib.php');
 
 $cmid    = required_param('id', PARAM_INT);
-$cm      = get_coursemodule_from_id('simplequiz2', $cmid);
+$cm      = get_coursemodule_from_id('simplequiz2', $cmid, 0, false, MUST_EXIST);
 $context = context_module::instance($cm->id);
 require_login($cm->course, true, $cm);
 require_capability('mod/simplequiz2:view', $context);
@@ -46,9 +46,6 @@ $decodeddata = (array) json_decode($simplequiz->__get('instance')->questions);
 // Mark activity has viewed.
 simplequiz2_view($simplequiz->__get('instance'), $course, $cm, $context);
 
-// Init attempt.
-$attemptid = $simplequiz->create_attempt($USER->id);
-
 echo $OUTPUT->header();
 
 if (!$decodeddata) {
@@ -56,6 +53,9 @@ if (!$decodeddata) {
         'message' => get_string('no-questions', 'simplequiz2'),
     ]);
 } else {
+    // Reuse the user's empty open attempt so page views do not add attempt rows.
+    $attemptid = $simplequiz->get_or_create_open_attempt((int) $USER->id);
+
     $converteddata = simplequiz2_rewrite_pluginfile_urls($decodeddata, $cmid);
 
     echo $renderer->student_view($simplequiz, $converteddata);

@@ -72,6 +72,7 @@ class provider implements core_userlist_provider, privacy_metadata_provider, pri
                 'userid' => 'privacy:metadata:simplequiz2_attempt_data:userid',
                 'answers' => 'privacy:metadata:simplequiz2_attempt_data:answers',
                 'timecreated' => 'privacy:metadata:simplequiz2_attempt_data:timecreated',
+                'timefinished' => 'privacy:metadata:simplequiz2_attempt_data:timefinished',
             ],
             'privacy:metadata:simplequiz2_attempt_data'
         );
@@ -196,6 +197,9 @@ class provider implements core_userlist_provider, privacy_metadata_provider, pri
             foreach ($sessions as $session) {
                 $row = new \stdClass();
                 $row->timecreated = \core_privacy\local\request\transform::datetime($session->timecreated);
+                $row->timefinished = $session->timefinished
+                    ? \core_privacy\local\request\transform::datetime($session->timefinished)
+                    : null;
                 $row->answers = $session->answers;
                 $attemptexport->sessions[] = $row;
             }

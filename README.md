@@ -40,6 +40,10 @@ The activity player calls `mod_simplequiz2_check_question` and `mod_simplequiz2_
 
 **Export to Quiz** checks **`mod/quiz:addinstance`** in the activity context (see `convert.php`). Attempt deletion uses **Course reset** (see below).
 
+## Attempts
+
+Each question is answered once per attempt, in order; the attempt is finished, counted and graded when its last question is answered. Opening the activity reuses the user's open attempt while it has no answer, so page views do not add attempt rows.
+
 ## Backup and restore
 
 The module advertises **`FEATURE_BACKUP_MOODLE2`** and includes `backup/moodle2` classes. Course backups are **expected** to include SimpleQuiz settings and user attempt data. **Verify** backup and restore (and duplicate activity) on your Moodle version and database engine before production use.

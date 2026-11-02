@@ -81,30 +81,27 @@ class check_question extends external_api {
 
         $simplequiz = new simplequiz((int) $cm->id);
         $questiondata = (array) json_decode($simplequiz->__get('instance')->questions);
-        $question = isset($questiondata[$params['questionid']])
-            ? simplequiz2_normalize_question($questiondata[$params['questionid']])
-            : null;
-
-        $grading = ['iscorrect' => false, 'results' => [], 'haspartialcorrect' => false];
-        if ($question) {
-            $grading = question_grading_service::grade_question($question, $params['answers']);
+        if (!isset($questiondata[$params['questionid']])) {
+            throw new \invalid_parameter_exception('Invalid question index');
         }
+        $question = simplequiz2_normalize_question((object) $questiondata[$params['questionid']]);
 
+        $grading = question_grading_service::grade_question($question, $params['answers']);
+
+        // Throws when the question was already answered, is out of order, or the attempt is finished,
+        // so per-answer results are only returned for the first submission of a question.
         $simplequiz->add_attempt_answer($params['attemptid'], $params['questionid'], $grading['iscorrect']);
 
-        $feedback = '';
-        if ($question) {
-            $outcome = simplequiz2_feedback_outcome_from_grading(
-                $grading['iscorrect'],
-                $grading['haspartialcorrect']
-            );
-            $feedback = simplequiz2_get_feedback_for_outcome(
-                $question,
-                $params['questionid'],
-                (int) $cm->id,
-                $outcome
-            );
-        }
+        $outcome = simplequiz2_feedback_outcome_from_grading(
+            $grading['iscorrect'],
+            $grading['haspartialcorrect']
+        );
+        $feedback = simplequiz2_get_feedback_for_outcome(
+            $question,
+            $params['questionid'],
+            (int) $cm->id,
+            $outcome
+        );
 
         return [
             'iscorrect' => $grading['iscorrect'],

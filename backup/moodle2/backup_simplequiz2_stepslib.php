@@ -66,7 +66,7 @@ class backup_simplequiz2_activity_structure_step extends backup_activity_structu
         ]);
         $sessions = new backup_nested_element('user_attempt_sessions');
         $session = new backup_nested_element('user_attempt_session', ['id'], [
-            'cmid', 'userid', 'answers', 'timecreated',
+            'cmid', 'userid', 'answers', 'timecreated', 'timefinished',
         ]);
 
         $simplequiz->add_child($attemptsums);
