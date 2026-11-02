@@ -59,6 +59,7 @@ $string['error_actionunknown'] = 'Solicitud incorrecta: acción desconocida {$a}
 $string['error_alreadyanswered'] = 'Esta pregunta ya se ha respondido en este intento.';
 $string['error_attemptfinished'] = 'Este intento ha finalizado. Recargue la página para comenzar un nuevo intento.';
 $string['error_capabilityrequired'] = 'Prohibido: se requiere una capacidad ({$a}).';
+$string['error_embedunavailable'] = 'El cuestionario de práctica no está disponible porque el bloque del tutor no está instalado.';
 $string['error_invalidattempt'] = 'Prohibido: acceso al intento no válido.';
 $string['error_moodleexception'] = 'Solicitud incorrecta: excepción de Moodle ({$a}).';
 $string['error_mustbeenrolled'] = 'No autorizado: debe estar matriculado ({$a}).';

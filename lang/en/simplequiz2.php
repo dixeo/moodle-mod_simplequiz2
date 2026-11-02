@@ -59,6 +59,7 @@ $string['error_actionunknown'] = 'Bad request: unknown action {$a}.';
 $string['error_alreadyanswered'] = 'This question has already been answered in this attempt.';
 $string['error_attemptfinished'] = 'This attempt is finished. Reload the page to start a new attempt.';
 $string['error_capabilityrequired'] = 'Forbidden: capability required ({$a}).';
+$string['error_embedunavailable'] = 'The practice quiz is not available because the tutor block is not installed.';
 $string['error_invalidattempt'] = 'Forbidden: invalid attempt access.';
 $string['error_moodleexception'] = 'Bad request: Moodle exception ({$a}).';
 $string['error_mustbeenrolled'] = 'Unauthorized: you must be enrolled ({$a}).';

@@ -59,6 +59,7 @@ $string['error_actionunknown'] = 'Requête incorrecte : action inconnue {$a}.';
 $string['error_alreadyanswered'] = 'Cette question a déjà reçu une réponse dans cette tentative.';
 $string['error_attemptfinished'] = 'Cette tentative est terminée. Rechargez la page pour commencer une nouvelle tentative.';
 $string['error_capabilityrequired'] = 'Interdit : une capacité est requise ({$a}).';
+$string['error_embedunavailable'] = 'Le quiz d\'entraînement n\'est pas disponible car le bloc tuteur n\'est pas installé.';
 $string['error_invalidattempt'] = 'Interdit : accès à la tentative non valide.';
 $string['error_moodleexception'] = 'Requête incorrecte : exception Moodle ({$a}).';
 $string['error_mustbeenrolled'] = 'Non autorisé : vous devez être inscrit ({$a}).';

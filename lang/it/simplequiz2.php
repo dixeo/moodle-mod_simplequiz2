@@ -59,6 +59,7 @@ $string['error_actionunknown'] = 'Richiesta non valida: azione sconosciuta {$a}.
 $string['error_alreadyanswered'] = 'A questa domanda è già stata data una risposta in questo tentativo.';
 $string['error_attemptfinished'] = 'Questo tentativo è terminato. Ricarica la pagina per iniziare un nuovo tentativo.';
 $string['error_capabilityrequired'] = 'Vietato: è richiesta una capacità ({$a}).';
+$string['error_embedunavailable'] = 'Il quiz di esercitazione non è disponibile perché il blocco tutor non è installato.';
 $string['error_invalidattempt'] = 'Vietato: accesso al tentativo non valido.';
 $string['error_moodleexception'] = 'Richiesta non valida: eccezione Moodle ({$a}).';
 $string['error_mustbeenrolled'] = 'Non autorizzato: è necessario essere iscritti ({$a}).';

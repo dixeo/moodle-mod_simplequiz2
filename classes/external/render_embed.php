@@ -29,6 +29,7 @@ use core_external\external_function_parameters;
 use core_external\external_single_structure;
 use core_external\external_value;
 use mod_simplequiz2\player_service;
+use mod_simplequiz2\util\embed_payload;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -71,12 +72,9 @@ class render_embed extends external_api {
 
         $context = \context_course::instance($params['courseid']);
         self::validate_context($context);
-        require_capability('block/dixeo_tutor:talktotutor', $context);
+        embed_payload::require_tutor_capability($context);
 
-        $decoded = json_decode($params['questions'], true);
-        if (!is_array($decoded) || empty($decoded)) {
-            throw new \invalid_parameter_exception('Invalid questions JSON');
-        }
+        $decoded = embed_payload::decode($params['questions']);
 
         // Normalise to objects for player_service.
         $questionsdata = [];

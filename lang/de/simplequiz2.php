@@ -58,6 +58,7 @@ $string['error_actionunknown'] = 'Ungültige Anfrage: unbekannte Aktion {$a}.';
 $string['error_alreadyanswered'] = 'Diese Frage wurde in diesem Versuch bereits beantwortet.';
 $string['error_attemptfinished'] = 'Dieser Versuch ist abgeschlossen. Laden Sie die Seite neu, um einen neuen Versuch zu starten.';
 $string['error_capabilityrequired'] = 'Verboten: Berechtigung erforderlich ({$a}).';
+$string['error_embedunavailable'] = 'Das Übungsquiz ist nicht verfügbar, da der Tutor-Block nicht installiert ist.';
 $string['error_invalidattempt'] = 'Verboten: ungültiger Zugriff auf den Versuch.';
 $string['error_moodleexception'] = 'Ungültige Anfrage: Moodle-Ausnahme ({$a}).';
 $string['error_mustbeenrolled'] = 'Nicht autorisiert: Sie müssen eingeschrieben sein ({$a}).';
