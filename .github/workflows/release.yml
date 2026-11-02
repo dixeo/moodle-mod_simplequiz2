@@ -45,6 +45,10 @@ jobs:
             echo "version.php is not at ${plugin}/version.php"
             exit 1
           fi
+          if unzip -Z1 "$asset" | grep -Eq "(^|/)(\.git|\.github|\.DS_Store)(/|$)|/\.git[a-z]*$"; then
+            echo "Development files found in the package"
+            exit 1
+          fi
 
       - name: Attach the ZIP to the GitHub release
         uses: softprops/action-gh-release@v2

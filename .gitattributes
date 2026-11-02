@@ -1,0 +1,4 @@
+# Development files are kept out of the release package built with git archive.
+.git* export-ignore
+.github export-ignore
+.DS_Store export-ignore
