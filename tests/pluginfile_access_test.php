@@ -58,7 +58,7 @@ final class pluginfile_access_test extends \advanced_testcase {
             'contextid' => $context->id,
             'component' => 'mod_simplequiz2',
             'filearea' => 'data',
-            'itemid' => 1,
+            'itemid' => \mod_simplequiz2\util\file_itemid::question_text(0),
             'filepath' => '/',
             'filename' => 'attachment.png',
         ], 'png');
@@ -66,7 +66,14 @@ final class pluginfile_access_test extends \advanced_testcase {
         $this->setUser($student);
 
         $this->expectException(\moodle_exception::class);
-        simplequiz2_pluginfile($course, $cm, $context, 'data', [1, 'attachment.png'], false);
+        simplequiz2_pluginfile(
+            $course,
+            $cm,
+            $context,
+            'data',
+            [\mod_simplequiz2\util\file_itemid::question_text(0), 'attachment.png'],
+            false
+        );
     }
 
     /**
@@ -88,7 +95,83 @@ final class pluginfile_access_test extends \advanced_testcase {
 
         $this->setUser($student);
 
-        $result = simplequiz2_pluginfile($course, $cm, $context, 'data', [1, 'missing.png'], false);
+        $result = simplequiz2_pluginfile(
+            $course,
+            $cm,
+            $context,
+            'data',
+            [\mod_simplequiz2\util\file_itemid::question_text(0), 'missing.png'],
+            false
+        );
         $this->assertFalse($result);
+    }
+
+    /**
+     * Unknown file areas and item ids outside the question scheme are not served.
+     *
+     * @covers ::simplequiz2_pluginfile
+     */
+    public function test_pluginfile_rejects_unknown_area_and_item(): void {
+        global $CFG;
+
+        require_once($CFG->dirroot . '/mod/simplequiz2/lib.php');
+
+        $course = $this->getDataGenerator()->create_course();
+        $quiz = $this->getDataGenerator()->create_module('simplequiz2', ['course' => $course->id]);
+        $context = \context_module::instance($quiz->cmid);
+        $cm = get_coursemodule_from_id('simplequiz2', $quiz->cmid);
+        $fs = get_file_storage();
+        foreach (['secret' => 1000, 'data' => 5] as $area => $itemid) {
+            $fs->create_file_from_string([
+                'contextid' => $context->id,
+                'component' => 'mod_simplequiz2',
+                'filearea' => $area,
+                'itemid' => $itemid,
+                'filepath' => '/',
+                'filename' => 'file.png',
+            ], 'png');
+        }
+        $this->setUser($this->getDataGenerator()->create_and_enrol($course, 'student'));
+
+        $this->assertFalse(simplequiz2_pluginfile($course, $cm, $context, 'secret', [1000, 'file.png'], false));
+        $this->assertFalse(simplequiz2_pluginfile($course, $cm, $context, 'data', [5, 'file.png'], false));
+    }
+
+    /**
+     * Feedback files are only available after the question was answered, or to editors.
+     *
+     * @covers ::simplequiz2_can_access_data_file
+     */
+    public function test_feedback_files_require_answered_question(): void {
+        global $CFG;
+
+        require_once($CFG->dirroot . '/mod/simplequiz2/lib.php');
+
+        $course = $this->getDataGenerator()->create_course();
+        $quiz = $this->getDataGenerator()->create_module('simplequiz2', ['course' => $course->id]);
+        $context = \context_module::instance($quiz->cmid);
+        $cm = get_coursemodule_from_id('simplequiz2', $quiz->cmid);
+        $feedbackitemid = \mod_simplequiz2\util\file_itemid::feedback(0, MOD_SIMPLEQUIZ2_FEEDBACK_CORRECT);
+        $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+
+        $this->setUser($teacher);
+        $this->assertTrue(simplequiz2_can_access_data_file($cm, $context, $feedbackitemid));
+
+        $this->setUser($student);
+        $this->assertTrue(
+            simplequiz2_can_access_data_file(
+                $cm,
+                $context,
+                \mod_simplequiz2\util\file_itemid::question_text(0)
+            )
+        );
+        $this->assertFalse(simplequiz2_can_access_data_file($cm, $context, $feedbackitemid));
+
+        $simplequiz = new \mod_simplequiz2\simplequiz((int) $quiz->cmid);
+        $attemptid = $simplequiz->get_or_create_open_attempt((int) $student->id);
+        $simplequiz->add_attempt_answer($attemptid, 0, true);
+
+        $this->assertTrue(simplequiz2_can_access_data_file($cm, $context, $feedbackitemid));
     }
 }

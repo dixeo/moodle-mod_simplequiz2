@@ -461,21 +461,29 @@ function simplequiz2_view($simplequiz, $course, $cm, $context) {
  */
 function simplequiz2_pluginfile($course, $cm, $context, $filearea, $args, $forcedownload, array $options = []) {
 
+    if ($context->contextlevel != CONTEXT_MODULE) {
+        return false;
+    }
+
     // Requires user logged in the course where image is displayed.
     require_course_login($course, true, $cm);
     require_capability('mod/simplequiz2:view', $context);
 
-    // Build the fullpath of the file before search it in DB.
-    $itemid = $args[0];
-    array_shift($args);
+    // Question, answer and feedback files are the only area served here; intro files are served by core.
+    if ($filearea !== 'data' || count($args) < 2) {
+        return false;
+    }
 
-    $fs           = get_file_storage();
-    $relativepath = implode('/', $args);
+    $itemid = (int) array_shift($args);
+    if (!simplequiz2_can_access_data_file($cm, $context, $itemid)) {
+        return false;
+    }
 
-    $fullpath = rtrim("/$context->id/mod_simplequiz2/$filearea/" . $itemid . "/$relativepath", '/');
+    $filename = array_pop($args);
+    $filepath = $args ? '/' . implode('/', $args) . '/' : '/';
 
-    // Try to get the file using hashed fullpath.
-    $file = $fs->get_file_by_hash(sha1($fullpath));
+    $fs   = get_file_storage();
+    $file = $fs->get_file($context->id, 'mod_simplequiz2', 'data', $itemid, $filepath, $filename);
 
     if ($file === false || $file->is_directory() === true) {
         return false;
@@ -483,6 +491,46 @@ function simplequiz2_pluginfile($course, $cm, $context, $filearea, $args, $force
 
     // Send the file.
     send_stored_file($file, null, 0, $forcedownload, $options);
+}
+
+/**
+ * Whether the current user may read one item of the "data" file area.
+ *
+ * Feedback files are only served to users who can edit the activity or who have
+ * already answered the question the feedback belongs to, so they cannot be used
+ * to discover the correct answer beforehand.
+ *
+ * @param stdClass|cm_info $cm Course module.
+ * @param context $context Module context.
+ * @param int $itemid File item id.
+ * @return bool
+ */
+function simplequiz2_can_access_data_file($cm, context $context, int $itemid): bool {
+    global $DB, $USER;
+
+    if ($itemid < \mod_simplequiz2\util\file_itemid::BASE) {
+        return false;
+    }
+    if (!\mod_simplequiz2\util\file_itemid::is_feedback($itemid)) {
+        return true;
+    }
+    if (has_capability('moodle/course:manageactivities', $context)) {
+        return true;
+    }
+
+    $questionorder = (string) \mod_simplequiz2\util\file_itemid::question_order($itemid);
+    $attempts = $DB->get_recordset('simplequiz2_attempt_data', ['cmid' => $cm->id, 'userid' => $USER->id], '', 'id, answers');
+    $answered = false;
+    foreach ($attempts as $attempt) {
+        $answers = json_decode($attempt->answers, true);
+        if (is_array($answers) && array_key_exists($questionorder, $answers)) {
+            $answered = true;
+            break;
+        }
+    }
+    $attempts->close();
+
+    return $answered;
 }
 
 /**
