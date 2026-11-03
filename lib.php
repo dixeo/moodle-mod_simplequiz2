@@ -710,29 +710,28 @@ function simplequiz2_strip_script_extended_elements(string $elements): string {
  *
  * Question, answer, and feedback HTML is not trusted. format_text() removes
  * script and executable event-handler markup and keeps ordinary formatting.
- * Callers that store files must rewrite @@PLUGINFILE@@ URLs before this runs.
+ * Relative image sources are removed here because this path has no file area
+ * to load them from. Callers that store files use simplequiz2_format_stored_html().
  *
  * @param string $html HTML to display.
  * @param \context|null $context Filter context. Cleaning still runs when omitted.
  * @return string
  */
 function simplequiz2_clean_author_html(string $html, ?\context $context = null): string {
-    $options = [
-        'para' => false,
-        'filter' => true,
-    ];
-    if ($context !== null) {
-        $options['context'] = $context;
-    }
-
-    return trim(format_text($html, FORMAT_HTML, $options));
+    return simplequiz2_resolve_content_images(
+        simplequiz2_apply_format_text($html, $context),
+        null,
+        null
+    );
 }
 
 /**
  * Rewrite pluginfile URLs, then clean one stored HTML field for display.
  *
  * URL rewriting and cleaning are separate steps. Rewriting runs first because
- * format_text() expects @@PLUGINFILE@@ tokens to already be real URLs.
+ * format_text() expects @@PLUGINFILE@@ tokens to already be real URLs. A
+ * remaining relative image source is loaded from this field's file area when
+ * that file exists, and dropped when it does not.
  *
  * @param string $html Stored HTML with @@PLUGINFILE@@ refs.
  * @param \context $context Module context.
@@ -752,7 +751,186 @@ function simplequiz2_format_stored_html(string $html, \context $context, int $it
         $itemid
     );
 
-    return simplequiz2_clean_author_html($rewritten, $context);
+    return simplequiz2_resolve_content_images(
+        simplequiz2_apply_format_text($rewritten, $context),
+        $context,
+        $itemid
+    );
+}
+
+/**
+ * Run format_text() on author HTML.
+ *
+ * @param string $html HTML to display.
+ * @param \context|null $context Filter context.
+ * @return string
+ */
+function simplequiz2_apply_format_text(string $html, ?\context $context = null): string {
+    $options = [
+        'para' => false,
+        'filter' => true,
+    ];
+    if ($context !== null) {
+        $options['context'] = $context;
+    }
+
+    return trim(format_text($html, FORMAT_HTML, $options));
+}
+
+/**
+ * Point content images at the field file area, or remove images that cannot load.
+ *
+ * Absolute and pluginfile URLs are left in place. A relative source is rewritten
+ * to pluginfile.php when that file is stored for the field. Any other relative
+ * source is removed so the browser does not request it from the activity page.
+ *
+ * @param string $html Cleaned HTML.
+ * @param \context|null $context Module context for the file area.
+ * @param int|null $itemid File area item id.
+ * @return string
+ */
+function simplequiz2_resolve_content_images(string $html, ?\context $context, ?int $itemid): string {
+    if ($html === '' || stripos($html, '<img') === false) {
+        return $html;
+    }
+
+    $document = new \DOMDocument();
+    $previous = libxml_use_internal_errors(true);
+    $loaded = $document->loadHTML(
+        '<?xml encoding="UTF-8"><div id="simplequiz2-html">' . $html . '</div>',
+        LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
+    );
+    libxml_clear_errors();
+    libxml_use_internal_errors($previous);
+    if ($loaded === false) {
+        return $html;
+    }
+
+    $wrapper = $document->getElementById('simplequiz2-html');
+    if ($wrapper === null) {
+        return $html;
+    }
+
+    $images = $document->getElementsByTagName('img');
+    for ($index = $images->length - 1; $index >= 0; $index--) {
+        $image = $images->item($index);
+        if ($image === null) {
+            continue;
+        }
+        $resolved = simplequiz2_content_image_url($image->getAttribute('src'), $context, $itemid);
+        if ($resolved === null) {
+            if ($image->parentNode !== null) {
+                $image->parentNode->removeChild($image);
+            }
+            continue;
+        }
+        if ($resolved !== $image->getAttribute('src')) {
+            $image->setAttribute('src', $resolved);
+        }
+    }
+
+    $output = '';
+    foreach ($wrapper->childNodes as $child) {
+        $output .= $document->saveHTML($child);
+    }
+
+    return trim($output);
+}
+
+/**
+ * Return a loadable image URL, or null when the image should be removed.
+ *
+ * @param string $src Image source from the cleaned HTML.
+ * @param \context|null $context Module context for the file area.
+ * @param int|null $itemid File area item id.
+ * @return string|null
+ */
+function simplequiz2_content_image_url(string $src, ?\context $context, ?int $itemid): ?string {
+    global $CFG;
+
+    $src = trim($src);
+    if ($src === '') {
+        return null;
+    }
+    if (preg_match('#^(https?:)?//#i', $src)) {
+        return $src;
+    }
+    if (strpos($src, 'pluginfile.php') !== false) {
+        if (strpos($src, '/') === 0) {
+            return $CFG->wwwroot . $src;
+        }
+        return $CFG->wwwroot . '/' . ltrim($src, '/');
+    }
+
+    $file = simplequiz2_content_image_file($src);
+    if ($file === null || $context === null || $itemid === null) {
+        return null;
+    }
+
+    $fs = get_file_storage();
+    if (
+        !$fs->file_exists(
+            $context->id,
+            'mod_simplequiz2',
+            'data',
+            $itemid,
+            $file['filepath'],
+            $file['filename']
+        )
+    ) {
+        return null;
+    }
+
+    $url = \moodle_url::make_pluginfile_url(
+        $context->id,
+        'mod_simplequiz2',
+        'data',
+        $itemid,
+        $file['filepath'],
+        $file['filename']
+    );
+
+    return $url->out(false);
+}
+
+/**
+ * Split a relative image source into a file-area path and filename.
+ *
+ * @param string $src Relative image source.
+ * @return array|null filepath and filename, or null when the source is not a file path.
+ */
+function simplequiz2_content_image_file(string $src): ?array {
+    $query = strpos($src, '?');
+    if ($query !== false) {
+        $src = substr($src, 0, $query);
+    }
+    $fragment = strpos($src, '#');
+    if ($fragment !== false) {
+        $src = substr($src, 0, $fragment);
+    }
+
+    $src = str_replace('\\', '/', rawurldecode($src));
+    $src = ltrim($src, '/');
+    if ($src === '' || strpos($src, '..') !== false) {
+        return null;
+    }
+
+    $filename = basename($src);
+    if ($filename === '' || $filename === '.' || $filename === '..') {
+        return null;
+    }
+
+    $directory = dirname($src);
+    if ($directory === '.' || $directory === '') {
+        $filepath = '/';
+    } else {
+        $filepath = '/' . trim($directory, '/') . '/';
+    }
+
+    return [
+        'filepath' => $filepath,
+        'filename' => $filename,
+    ];
 }
 
 /**

@@ -361,6 +361,7 @@ final class lib_test extends \advanced_testcase {
         $this->assertStringNotContainsString('onmouseover', strtolower($question->partiallycorrectfeedback));
         $this->assertStringContainsString('No', $question->incorrectfeedback);
         $this->assertStringNotContainsString('onerror', strtolower($question->incorrectfeedback));
+        $this->assertStringNotContainsString('src="x"', $question->incorrectfeedback);
 
         $feedback = simplequiz2_get_feedback_for_outcome($question, 0, $cm->id, MOD_SIMPLEQUIZ2_FEEDBACK_CORRECT);
         $this->assertStringContainsString('Yes', $feedback);
@@ -424,7 +425,76 @@ final class lib_test extends \advanced_testcase {
         $this->assertStringNotContainsString('<script', $joined);
         $this->assertStringNotContainsString('onmouseover', $joined);
         $this->assertStringNotContainsString('onerror', $joined);
+        $this->assertStringNotContainsString('src="x"', $joined);
         $this->assertStringContainsString('Yes', $feedback[0]);
+    }
+
+    /**
+     * Question and feedback images load from the field file area.
+     *
+     * @covers ::simplequiz2_format_stored_html
+     * @covers ::simplequiz2_rewrite_pluginfile_urls
+     * @covers ::simplequiz2_resolve_content_images
+     */
+    public function test_content_images_load_from_the_file_area(): void {
+        $this->setAdminUser();
+        $course = $this->getDataGenerator()->create_course();
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_simplequiz2');
+        $quiz = $generator->create_instance(['course' => $course->id]);
+        $cm = get_coursemodule_from_instance('simplequiz2', $quiz->id, $course->id, false, MUST_EXIST);
+        $context = \context_module::instance($cm->id);
+        $textitemid = \mod_simplequiz2\util\file_itemid::question_text(0);
+        $feedbackitemid = \mod_simplequiz2\util\file_itemid::feedback(0, MOD_SIMPLEQUIZ2_FEEDBACK_INCORRECT);
+
+        $fs = get_file_storage();
+        $fs->create_file_from_string([
+            'contextid' => $context->id,
+            'component' => 'mod_simplequiz2',
+            'filearea' => 'data',
+            'itemid' => $textitemid,
+            'filepath' => '/',
+            'filename' => 'diagram.png',
+        ], 'diagram');
+        $fs->create_file_from_string([
+            'contextid' => $context->id,
+            'component' => 'mod_simplequiz2',
+            'filearea' => 'data',
+            'itemid' => $feedbackitemid,
+            'filepath' => '/',
+            'filename' => 'hint.png',
+        ], 'hint');
+
+        $questions = simplequiz2_rewrite_pluginfile_urls([
+            (object) [
+                'text' => '<img src="diagram.png" alt="diagram">What is two plus two?',
+                'answers' => [
+                    (object) ['text' => 'Four', 'iscorrect' => 1],
+                ],
+                'correctfeedback' => '',
+                'partiallycorrectfeedback' => '',
+                'incorrectfeedback' => 'Not quite. <img src="missing.png" alt="missing"><img src="hint.png" alt="hint">',
+            ],
+        ], $cm->id);
+
+        $question = $questions[0];
+        $this->assertStringContainsString('pluginfile.php', $question->text);
+        $this->assertStringContainsString('diagram.png', $question->text);
+        $this->assertStringContainsString((string) $textitemid, $question->text);
+        $this->assertStringNotContainsString('src="diagram.png"', $question->text);
+        $this->assertStringContainsString('What is two plus two?', $question->text);
+
+        $feedback = simplequiz2_get_feedback_for_outcome(
+            $question,
+            0,
+            $cm->id,
+            MOD_SIMPLEQUIZ2_FEEDBACK_INCORRECT
+        );
+        $this->assertStringContainsString('Not quite.', $feedback);
+        $this->assertStringContainsString('pluginfile.php', $feedback);
+        $this->assertStringContainsString('hint.png', $feedback);
+        $this->assertStringContainsString((string) $feedbackitemid, $feedback);
+        $this->assertStringNotContainsString('missing.png', $feedback);
+        $this->assertStringNotContainsString('src="hint.png"', $feedback);
     }
 
     /**
