@@ -36,6 +36,7 @@ define('MOD_SIMPLEQUIZ2_FEEDBACK_INCORRECT', 'incorrect');
 
 defined('MOODLE_INTERNAL') || die;
 
+global $CFG;
 require_once($CFG->libdir . '/completionlib.php');
 
 /**
