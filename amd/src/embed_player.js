@@ -170,7 +170,11 @@ define(['core/str', 'mod_simplequiz2/network'], function(str, Network) {
                 return Promise.resolve();
             }
             return connection.connectionMessage().then(function(text) {
-                feedbackEl.textContent = text;
+                const notice = document.createElement('div');
+                notice.className = 'alert alert-danger alert-block fade in';
+                notice.setAttribute('role', 'alert');
+                notice.textContent = text;
+                feedbackEl.replaceChildren(notice);
                 feedbackEl.hidden = false;
                 return undefined;
             }).catch(function() {

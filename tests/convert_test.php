@@ -89,6 +89,9 @@ final class convert_test extends \advanced_testcase {
     public function test_failed_conversion_is_rolled_back(): void {
         global $CFG, $DB;
 
+        // The failure path rolls back the open database transaction. Commit the
+        // course first, as it already is when a teacher opens the convert page.
+        $this->preventResetByRollback();
         $this->setAdminUser();
         $course = $this->getDataGenerator()->create_course(['format' => 'singleactivity', 'activitytype' => 'simplequiz2']);
         // A multiple choice question needs two answers, so saving it in the question bank fails.
