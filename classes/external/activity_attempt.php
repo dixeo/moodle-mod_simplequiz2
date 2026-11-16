@@ -39,8 +39,6 @@ trait activity_attempt {
         global $DB, $USER;
 
         $cm = get_coursemodule_from_id('simplequiz2', $coursemoduleid, 0, false, MUST_EXIST);
-        $course = get_course($cm->course);
-        require_login($course, false, $cm);
         $context = \context_module::instance($cm->id);
         self::validate_context($context);
         require_capability('mod/simplequiz2:view', $context);
