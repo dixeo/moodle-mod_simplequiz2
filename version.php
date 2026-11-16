@@ -25,7 +25,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2026110201;
+$plugin->version   = 2026111600;
 $plugin->requires  = 2023100900;        // Moodle 4.3 (Build: 20231009) minimum.
 $plugin->supported = [403, 501];
 $plugin->component = 'mod_simplequiz2';

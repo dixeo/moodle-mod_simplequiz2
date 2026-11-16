@@ -5,14 +5,15 @@
 // @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
 
 define([
-    'core/ajax',
+    'mod_simplequiz2/network',
     'core/config',
     'core/str',
     'core/modal_save_cancel',
     'core/modal_events',
-    'core/notification',
     'mod_simplequiz2/player_core',
-], function(Ajax, Config, str, ModalSaveCancel, ModalEvents, Notification, playerCore) {
+], function(Network, Config, str, ModalSaveCancel, ModalEvents, playerCore) {
+
+    const connection = Network.forComponent({component: 'mod_simplequiz2'});
 
     const activityPlayer = {
         instanceId: 0,
@@ -200,7 +201,7 @@ define([
             const data = await this.callService('mod_simplequiz2_get_attempt_results', {
                 coursemoduleid: this.courseModuleId,
                 attemptid: this.attemptId,
-            });
+            }, true);
             if (!data) {
                 return;
             }
@@ -239,14 +240,26 @@ define([
             }
         },
 
-        callService: async function(methodname, args) {
+        /**
+         * Call one web service and report its failure.
+         *
+         * Answer checks record the learner's answer and are sent once. Reads are retried
+         * through short connection losses.
+         *
+         * @param {string} methodname
+         * @param {Object} args
+         * @param {boolean} [read=false] Whether the call is an idempotent read.
+         * @return {Promise<Object|null>} The result, or null after a reported failure.
+         */
+        callService: async function(methodname, args, read = false) {
             let failure = null;
             let result = null;
+            const send = () => Network.call({
+                methodname: methodname,
+                args: args,
+            }, {timeout: read ? Network.TIMEOUT_STATUS_MS : Network.TIMEOUT_ACTION_MS});
             try {
-                result = await Ajax.call([{
-                    methodname: methodname,
-                    args: args,
-                }])[0];
+                result = await (read ? Network.retryRead(send) : send());
             } catch (error) {
                 failure = error;
             }
@@ -283,7 +296,7 @@ define([
                 return;
             }
 
-            Notification.exception(error);
+            connection.exception(error);
         },
     };
 

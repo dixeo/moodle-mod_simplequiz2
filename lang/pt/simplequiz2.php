@@ -58,6 +58,7 @@ $string['error_actionunknown'] = 'Pedido inválido: ação desconhecida {$a}.';
 $string['error_alreadyanswered'] = 'Esta pergunta já foi respondida nesta tentativa.';
 $string['error_attemptfinished'] = 'Esta tentativa está concluída. Recarregue a página para iniciar uma nova tentativa.';
 $string['error_capabilityrequired'] = 'Proibido: é necessária uma capacidade ({$a}).';
+$string['error_connection'] = 'A ligação ao servidor foi perdida. Verifique a sua rede e tente novamente.';
 $string['error_embedunavailable'] = 'O questionário de prática não está disponível porque o bloco do tutor não está instalado.';
 $string['error_invalidattempt'] = 'Proibido: acesso à tentativa inválido.';
 $string['error_moodleexception'] = 'Pedido inválido: exceção do Moodle ({$a}).';

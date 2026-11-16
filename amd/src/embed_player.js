@@ -4,7 +4,9 @@
 // @copyright  2026 Dixeo (contact@dixeo.com)
 // @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
 
-define(['core/str', 'core/ajax'], function(str, ajax) {
+define(['core/str', 'mod_simplequiz2/network'], function(str, Network) {
+
+    const connection = Network.forComponent({component: 'mod_simplequiz2'});
 
     /**
      * Strip HTML to plain text for tutor context payloads.
@@ -133,6 +135,7 @@ define(['core/str', 'core/ajax'], function(str, ajax) {
 
         /**
          * Grade one question via webservice (correct answers never sent to the client beforehand).
+         * The check records the answer, so it is sent once.
          *
          * @param {number} questionId
          * @param {number[]} selectedIds
@@ -148,7 +151,31 @@ define(['core/str', 'core/ajax'], function(str, ajax) {
                     answers: selectedIds.join(','),
                 },
             };
-            return ajax.call([request])[0];
+            return Network.call(request, {timeout: Network.TIMEOUT_ACTION_MS});
+        };
+
+        /**
+         * Show the connection message in a question's feedback area after a lost answer check.
+         *
+         * @param {number|null} questionId
+         * @param {*} failure Rejection of the check.
+         * @return {Promise<void>}
+         */
+        const showConnectionFeedback = function(questionId, failure) {
+            if (questionId === null || !Network.isConnectionError(failure)) {
+                return Promise.resolve();
+            }
+            const feedbackEl = root.querySelector('.question-feedback[data-questionid="' + questionId + '"]');
+            if (!feedbackEl) {
+                return Promise.resolve();
+            }
+            return connection.connectionMessage().then(function(text) {
+                feedbackEl.textContent = text;
+                feedbackEl.hidden = false;
+                return undefined;
+            }).catch(function() {
+                return undefined;
+            });
         };
 
         const cloneBestAttempt = function(attempt) {
@@ -463,8 +490,8 @@ define(['core/str', 'core/ajax'], function(str, ajax) {
 
         root.querySelectorAll('.question-container button.check-answer').forEach(function(checkBtn) {
             checkBtn.addEventListener('click', function() {
+                const questionId = parseInt(checkBtn.dataset.questionid, 10);
                 loadStrings.then(async function() {
-                    const questionId = parseInt(checkBtn.dataset.questionid, 10);
                     const selector = '.question-container[data-questionid="' + questionId + '"] .answer-container.selected';
                     const selectedEls = root.querySelectorAll(selector);
                     const selectedIds = [];
@@ -514,8 +541,8 @@ define(['core/str', 'core/ajax'], function(str, ajax) {
 
                     emitStateChange();
                     return undefined;
-                }).catch(function() {
-                    return undefined;
+                }).catch(function(failure) {
+                    return showConnectionFeedback(questionId, failure);
                 });
             });
         });
@@ -547,18 +574,23 @@ define(['core/str', 'core/ajax'], function(str, ajax) {
             });
         }
 
+        // Question whose saved answer is being checked again while the state is restored.
+        let restoringQuestionId = null;
+
         const restoreSavedAnswers = async function(savedResults, savedSelections) {
             for (let questionId = 0; questionId < savedResults.length; questionId++) {
                 const correct = savedResults[questionId];
                 if (typeof correct !== 'boolean') {
                     continue;
                 }
+                restoringQuestionId = questionId;
                 const selectedIds = savedSelections[questionId] || [];
                 selectedByQuestion[questionId] = selectedIds.slice();
                 answerResults[questionId] = correct;
                 const data = await checkQuestion(questionId, selectedIds);
                 paintAnsweredQuestion(questionId, selectedIds, data);
             }
+            restoringQuestionId = null;
         };
 
         const restoreInitialResultsView = async function(score) {
@@ -628,8 +660,8 @@ define(['core/str', 'core/ajax'], function(str, ajax) {
         if (initialState) {
             loadStrings.then(function() {
                 return restoreInitialState();
-            }).catch(function() {
-                return undefined;
+            }).catch(function(failure) {
+                return showConnectionFeedback(restoringQuestionId, failure);
             });
         }
 

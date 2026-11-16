@@ -26,7 +26,8 @@ define([
     'editor_tiny/options',
     'core/ajax',
     'tiny_autosave/options',
-], function(Tiny, Options, Ajax, AutosaveOptions) {
+    'mod_simplequiz2/network',
+], function(Tiny, Options, Ajax, AutosaveOptions, Network) {
 
     /** @type {Object|null} TinyMCE base options from PHP (includes plugins). */
     let tinyBaseOptions = null;
@@ -103,11 +104,13 @@ define([
             return [];
         }
         try {
-            const requests = Array.from({length: count}, () => ({
+            const requests = () => Array.from({length: count}, () => ({
                 methodname: 'mod_simplequiz2_get_unused_draft_itemids',
                 args: {},
             }));
-            const responses = await Promise.all(Ajax.call(requests));
+            const responses = await Network.retryRead(() => Promise.all(
+                Network.callMany(requests(), {timeout: Network.TIMEOUT_STATUS_MS})
+            ));
             const itemids = responses.map((response) => {
                 if (!response) {
                     return null;

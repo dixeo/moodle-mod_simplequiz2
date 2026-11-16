@@ -21,8 +21,10 @@
  * @license     http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-define(['mod_simplequiz2/editor_helpers', 'core/str', 'core/templates', 'core/notification', 'core/ajax'],
-    function(EditorHelpers, str, Templates, Notification, Ajax) {
+define(['mod_simplequiz2/editor_helpers', 'core/str', 'core/templates', 'core/notification', 'mod_simplequiz2/network'],
+    function(EditorHelpers, str, Templates, Notification, Network) {
+
+    const connection = Network.forComponent({component: 'mod_simplequiz2'});
 
     const STRING_KEYS = [
         'editquestion',
@@ -563,16 +565,17 @@ define(['mod_simplequiz2/editor_helpers', 'core/str', 'core/templates', 'core/no
                 return;
             }
             let response = null;
+            const args = {
+                contextid: this.contextId,
+                question: this.collectQuestionFields(questionId),
+            };
             try {
-                response = await Ajax.call([{
+                response = await Network.retryRead(() => Network.call({
                     methodname: 'mod_simplequiz2_render_question_summary',
-                    args: {
-                        contextid: this.contextId,
-                        question: this.collectQuestionFields(questionId),
-                    },
-                }])[0];
+                    args: args,
+                }, {timeout: Network.TIMEOUT_STATUS_MS}));
             } catch (error) {
-                Notification.exception(error);
+                connection.exception(error);
                 return;
             }
             await Templates.replaceNodeContents(summaryEl, response.html, '');
